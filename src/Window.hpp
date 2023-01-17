@@ -222,6 +222,7 @@ class CWindow {
     bool                   isHidden();
     void                   applyDynamicRule(const SWindowRule& r);
     void                   updateDynamicRules();
+    bool                   isInCurvedCorner(double x, double y);
 
   private:
     // For hidden windows and stuff

@@ -36,11 +36,15 @@ void CInputManager::onMouseWarp(wlr_pointer_motion_absolute_event* e) {
 }
 
 void CInputManager::mouseMoveUnified(uint32_t time, bool refocus) {
-    static auto* const PFOLLOWMOUSE   = &g_pConfigManager->getConfigValuePtr("input:follow_mouse")->intValue;
-    static auto* const PMOUSEDPMS     = &g_pConfigManager->getConfigValuePtr("misc:mouse_move_enables_dpms")->intValue;
-    static auto* const PFOLLOWONDND   = &g_pConfigManager->getConfigValuePtr("misc:always_follow_on_dnd")->intValue;
-    static auto* const PHOGFOCUS      = &g_pConfigManager->getConfigValuePtr("misc:layers_hog_keyboard_focus")->intValue;
-    static auto* const PFLOATBEHAVIOR = &g_pConfigManager->getConfigValuePtr("input:float_switch_override_focus")->intValue;
+    static auto* const PFOLLOWMOUSE      = &g_pConfigManager->getConfigValuePtr("input:follow_mouse")->intValue;
+    static auto* const PMOUSEDPMS        = &g_pConfigManager->getConfigValuePtr("misc:mouse_move_enables_dpms")->intValue;
+    static auto* const PFOLLOWONDND      = &g_pConfigManager->getConfigValuePtr("misc:always_follow_on_dnd")->intValue;
+    static auto* const PHOGFOCUS         = &g_pConfigManager->getConfigValuePtr("misc:layers_hog_keyboard_focus")->intValue;
+    static auto* const PFLOATBEHAVIOR    = &g_pConfigManager->getConfigValuePtr("input:float_switch_override_focus")->intValue;
+    static auto* const PRESIZEONBORDER   = &g_pConfigManager->getConfigValuePtr("general:resize_on_borders")->intValue;
+    static auto* const PBORDERSIZE       = &g_pConfigManager->getConfigValuePtr("general:border_size")->intValue;
+    static auto* const PBORDERGRABEXTEND = &g_pConfigManager->getConfigValuePtr("general:extend_border_grab_area")->intValue;
+    const auto         BORDER_GRAB_AREA  = *PRESIZEONBORDER ? *PBORDERSIZE + *PBORDERGRABEXTEND : 0;
 
     m_pFoundSurfaceToFocus      = nullptr;
     m_pFoundLSToFocus           = nullptr;
@@ -160,7 +164,8 @@ void CInputManager::mouseMoveUnified(uint32_t time, bool refocus) {
 
         // only check floating because tiled cant be over fullscreen
         for (auto w = g_pCompositor->m_vWindows.rbegin(); w != g_pCompositor->m_vWindows.rend(); w++) {
-            wlr_box box = {(*w)->m_vRealPosition.vec().x, (*w)->m_vRealPosition.vec().y, (*w)->m_vRealSize.vec().x, (*w)->m_vRealSize.vec().y};
+            wlr_box box = {(*w)->m_vRealPosition.vec().x - BORDER_GRAB_AREA, (*w)->m_vRealPosition.vec().y - BORDER_GRAB_AREA, (*w)->m_vRealSize.vec().x + 2 * BORDER_GRAB_AREA,
+                           (*w)->m_vRealSize.vec().y + 2 * BORDER_GRAB_AREA};
             if ((((*w)->m_bIsFloating && (*w)->m_bIsMapped && ((*w)->m_bCreatedOverFullscreen || (*w)->m_bPinned)) ||
                  (g_pCompositor->isWorkspaceSpecial((*w)->m_iWorkspaceID) && PMONITOR->specialWorkspaceID)) &&
                 wlr_box_contains_point(&box, mouseCoords.x, mouseCoords.y) && g_pCompositor->isWorkspaceVisible((*w)->m_iWorkspaceID) && !(*w)->isHidden()) {
@@ -307,6 +312,11 @@ void CInputManager::mouseMoveUnified(uint32_t time, bool refocus) {
                 g_pCompositor->focusWindow(pFoundWindow, foundSurface);
         }
 
+        // change cursor icon if hovering over border
+        if (*PRESIZEONBORDER && !pFoundWindow->m_bIsFullscreen && !g_pKeybindManager->m_bIsMouseBindActive) {
+            setCursorIconOnBorder(pFoundWindow);
+        }
+
         m_bLastFocusOnLS = false;
     } else {
         if (pFoundLayerSurface && pFoundLayerSurface->layerSurface->current.keyboard_interactive && *PFOLLOWMOUSE != 3 && allowKeyboardRefocus) {
@@ -394,9 +404,10 @@ void CInputManager::setClickMode(eClickBehaviorMode mode) {
 void CInputManager::processMouseDownNormal(wlr_pointer_button_event* e) {
 
     // notify the keybind manager
-    static auto* const PPASSMOUSE   = &g_pConfigManager->getConfigValuePtr("binds:pass_mouse_when_bound")->intValue;
-    const auto         PASS         = g_pKeybindManager->onMouseEvent(e);
-    static auto* const PFOLLOWMOUSE = &g_pConfigManager->getConfigValuePtr("input:follow_mouse")->intValue;
+    static auto* const PPASSMOUSE      = &g_pConfigManager->getConfigValuePtr("binds:pass_mouse_when_bound")->intValue;
+    const auto         PASS            = g_pKeybindManager->onMouseEvent(e);
+    static auto* const PFOLLOWMOUSE    = &g_pConfigManager->getConfigValuePtr("input:follow_mouse")->intValue;
+    static auto* const PRESIZEONBORDER = &g_pConfigManager->getConfigValuePtr("general:resize_on_borders")->intValue;
 
     if (!PASS && !*PPASSMOUSE)
         return;
@@ -412,6 +423,17 @@ void CInputManager::processMouseDownNormal(wlr_pointer_button_event* e) {
             // if clicked on a floating window make it top
             if (g_pCompositor->m_pLastWindow && g_pCompositor->m_pLastWindow->m_bIsFloating)
                 g_pCompositor->moveWindowToTop(g_pCompositor->m_pLastWindow);
+
+            // clicking on border triggers resize
+            if (*PRESIZEONBORDER && g_pCompositor->m_pLastWindow && !g_pCompositor->m_pLastWindow->m_bIsFullscreen && !g_pCompositor->m_pLastWindow->m_bFakeFullscreenState) {
+                const wlr_box real        = {g_pCompositor->m_pLastWindow->m_vRealPosition.vec().x, g_pCompositor->m_pLastWindow->m_vRealPosition.vec().y,
+                                             g_pCompositor->m_pLastWindow->m_vRealSize.vec().x, g_pCompositor->m_pLastWindow->m_vRealSize.vec().y};
+                const auto    mouseCoords = g_pInputManager->getMouseCoordsInternal();
+                if ((!wlr_box_contains_point(&real, mouseCoords.x, mouseCoords.y) || g_pCompositor->m_pLastWindow->isInCurvedCorner(mouseCoords.x, mouseCoords.y))) {
+                    g_pKeybindManager->resizeWithBorder(e);
+                    return;
+                }
+            }
 
             break;
         case WLR_BUTTON_RELEASED: break;
@@ -1308,4 +1330,51 @@ void CInputManager::releaseAllMouseButtons() {
     }
 
     m_lCurrentlyHeldButtons.clear();
+}
+
+void CInputManager::setCursorIconOnBorder(CWindow* w) {
+    static auto* const PROUNDING   = &g_pConfigManager->getConfigValuePtr("decoration:rounding")->intValue;
+    static const auto* PBORDERSIZE = &g_pConfigManager->getConfigValuePtr("general:border_size")->intValue;
+    // give a small leeway (10 px) for corner icon
+    const auto CORNER      = *PROUNDING + *PBORDERSIZE + 10;
+    const auto mouseCoords = getMouseCoordsInternal();
+    wlr_box    box         = {w->m_vRealPosition.vec().x, w->m_vRealPosition.vec().y, w->m_vRealSize.vec().x, w->m_vRealSize.vec().y};
+    if (wlr_box_contains_point(&box, mouseCoords.x, mouseCoords.y)) {
+        if (w->isInCurvedCorner(mouseCoords.x, mouseCoords.y)) {
+            if (mouseCoords.y < box.y + CORNER) {
+                if (mouseCoords.x < box.x + CORNER)
+                    setCursorImageUntilUnset("top_left_corner");
+                else
+                    setCursorImageUntilUnset("top_right_corner");
+            } else {
+                if (mouseCoords.x < box.x + CORNER)
+                    setCursorImageUntilUnset("bottom_left_corner");
+                else
+                    setCursorImageUntilUnset("bottom_right_corner");
+            }
+        } else {
+            unsetCursorImage();
+        }
+    } else {
+        if (mouseCoords.y < box.y + CORNER) {
+            if (mouseCoords.x < box.x + CORNER)
+                setCursorImageUntilUnset("top_left_corner");
+            else if (mouseCoords.x > box.x + box.width - CORNER)
+                setCursorImageUntilUnset("top_right_corner");
+            else
+                setCursorImageUntilUnset("top_side");
+        } else if (mouseCoords.y > box.y + box.height - CORNER) {
+            if (mouseCoords.x < box.x)
+                setCursorImageUntilUnset("bottom_left_corner");
+            else if (mouseCoords.x > box.x + box.width - CORNER)
+                setCursorImageUntilUnset("bottom_right_corner");
+            else
+                setCursorImageUntilUnset("bottom_side");
+        } else {
+            if (mouseCoords.x < box.x + CORNER)
+                setCursorImageUntilUnset("left_side");
+            else if (mouseCoords.x > box.x + box.width - CORNER)
+                setCursorImageUntilUnset("right_side");
+        }
+    }
 }
