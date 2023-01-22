@@ -44,6 +44,7 @@ void CInputManager::mouseMoveUnified(uint32_t time, bool refocus) {
     static auto* const PRESIZEONBORDER   = &g_pConfigManager->getConfigValuePtr("general:resize_on_borders")->intValue;
     static auto* const PBORDERSIZE       = &g_pConfigManager->getConfigValuePtr("general:border_size")->intValue;
     static auto* const PBORDERGRABEXTEND = &g_pConfigManager->getConfigValuePtr("general:extend_border_grab_area")->intValue;
+    static auto* const PRESIZECURSORICON = &g_pConfigManager->getConfigValuePtr("general:hover_icon_on_border")->intValue;
     const auto         BORDER_GRAB_AREA  = *PRESIZEONBORDER ? *PBORDERSIZE + *PBORDERGRABEXTEND : 0;
 
     m_pFoundSurfaceToFocus      = nullptr;
@@ -280,6 +281,11 @@ void CInputManager::mouseMoveUnified(uint32_t time, bool refocus) {
     }
 
     if (pFoundWindow) {
+        // change cursor icon if hovering over border, skip if mouse bind is active
+        if (*PRESIZEONBORDER && *PRESIZECURSORICON && !pFoundWindow->m_bIsFullscreen && !g_pKeybindManager->m_bIsMouseBindActive) {
+            setCursorIconOnBorder(pFoundWindow);
+        }
+
         if (*PFOLLOWMOUSE != 1 && !refocus) {
             if (pFoundWindow != g_pCompositor->m_pLastWindow && g_pCompositor->m_pLastWindow &&
                 ((pFoundWindow->m_bIsFloating && *PFLOATBEHAVIOR == 2) || (g_pCompositor->m_pLastWindow->m_bIsFloating != pFoundWindow->m_bIsFloating && *PFLOATBEHAVIOR != 0))) {
@@ -310,11 +316,6 @@ void CInputManager::mouseMoveUnified(uint32_t time, bool refocus) {
         } else {
             if ((*PFOLLOWMOUSE != 3 && allowKeyboardRefocus) || refocus)
                 g_pCompositor->focusWindow(pFoundWindow, foundSurface);
-        }
-
-        // change cursor icon if hovering over border
-        if (*PRESIZEONBORDER && !pFoundWindow->m_bIsFullscreen && !g_pKeybindManager->m_bIsMouseBindActive) {
-            setCursorIconOnBorder(pFoundWindow);
         }
 
         m_bLastFocusOnLS = false;
@@ -425,7 +426,8 @@ void CInputManager::processMouseDownNormal(wlr_pointer_button_event* e) {
                 g_pCompositor->moveWindowToTop(g_pCompositor->m_pLastWindow);
 
             // clicking on border triggers resize
-            if (*PRESIZEONBORDER && g_pCompositor->m_pLastWindow && !g_pCompositor->m_pLastWindow->m_bIsFullscreen && !g_pCompositor->m_pLastWindow->m_bFakeFullscreenState) {
+            if (*PRESIZEONBORDER && g_pCompositor->m_pLastWindow && !m_bLastFocusOnLS && !g_pCompositor->m_pLastWindow->m_bIsFullscreen &&
+                !g_pCompositor->m_pLastWindow->m_bFakeFullscreenState) {
                 const wlr_box real        = {g_pCompositor->m_pLastWindow->m_vRealPosition.vec().x, g_pCompositor->m_pLastWindow->m_vRealPosition.vec().y,
                                              g_pCompositor->m_pLastWindow->m_vRealSize.vec().x, g_pCompositor->m_pLastWindow->m_vRealSize.vec().y};
                 const auto    mouseCoords = g_pInputManager->getMouseCoordsInternal();
