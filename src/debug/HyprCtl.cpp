@@ -118,6 +118,7 @@ static std::string getWindowData(CWindow* w, HyprCtl::eHyprCtlOutputFormat forma
     "pinned": %s,
     "fullscreen": %s,
     "fullscreenMode": %i,
+    "fakeFullscreen": %s,
     "grouped": [%s],
     "swallowing": %s
 },)#",
@@ -130,11 +131,11 @@ static std::string getWindowData(CWindow* w, HyprCtl::eHyprCtlOutputFormat forma
             escapeJSONStrings(g_pXWaylandManager->getTitle(w)).c_str(), w->getPID(), ((int)w->m_bIsX11 == 1 ? "true" : "false"), (w->m_bPinned ? "true" : "false"),
             (w->m_bIsFullscreen ? "true" : "false"),
             (w->m_bIsFullscreen ? (g_pCompositor->getWorkspaceByID(w->m_iWorkspaceID) ? g_pCompositor->getWorkspaceByID(w->m_iWorkspaceID)->m_efFullscreenMode : 0) : 0),
-            getGroupedData(w, format).c_str(), (w->m_pSwallowed ? getFormat("\"0x%x\"", w->m_pSwallowed).c_str() : "null"));
+            w->m_bFakeFullscreenState ? "true" : "false", getGroupedData(w, format).c_str(), (w->m_pSwallowed ? getFormat("\"0x%x\"", w->m_pSwallowed).c_str() : "null"));
     } else {
         return getFormat(
             "Window %x -> %s:\n\tat: %i,%i\n\tsize: %i,%i\n\tworkspace: %i (%s)\n\tfloating: %i\n\tmonitor: %i\n\tclass: %s\n\ttitle: %s\n\tpid: %i\n\txwayland: %i\n\tpinned: "
-            "%i\n\tfullscreen: %i\n\tfullscreenmode: %i\n\tgrouped: %s\n\tswallowing: %x\n\n",
+            "%i\n\tfullscreen: %i\n\tfullscreenmode: %i\n\tfakefullscreen: %i\n\tgrouped: %s\n\tswallowing: %x\n\n",
             w, w->m_szTitle.c_str(), (int)w->m_vRealPosition.goalv().x, (int)w->m_vRealPosition.goalv().y, (int)w->m_vRealSize.goalv().x, (int)w->m_vRealSize.goalv().y,
             w->m_iWorkspaceID,
             (w->m_iWorkspaceID == -1                                ? "" :
@@ -143,7 +144,7 @@ static std::string getWindowData(CWindow* w, HyprCtl::eHyprCtlOutputFormat forma
             (int)w->m_bIsFloating, w->m_iMonitorID, g_pXWaylandManager->getAppIDClass(w).c_str(), g_pXWaylandManager->getTitle(w).c_str(), w->getPID(), (int)w->m_bIsX11,
             (int)w->m_bPinned, (int)w->m_bIsFullscreen,
             (w->m_bIsFullscreen ? (g_pCompositor->getWorkspaceByID(w->m_iWorkspaceID) ? g_pCompositor->getWorkspaceByID(w->m_iWorkspaceID)->m_efFullscreenMode : 0) : 0),
-            getGroupedData(w, format).c_str(), w->m_pSwallowed);
+            (int)w->m_bFakeFullscreenState, getGroupedData(w, format).c_str(), w->m_pSwallowed);
     }
 }
 
@@ -239,7 +240,7 @@ std::string layersRequest(HyprCtl::eHyprCtlOutputFormat format) {
                 escapeJSONStrings(mon->szName).c_str());
 
             int layerLevel = 0;
-            for (auto& level : mon->m_aLayerSurfaceLists) {
+            for (auto& level : mon->m_aLayerSurfaceLayers) {
                 result += getFormat(
                     R"#(
         "%i": [
@@ -285,7 +286,7 @@ std::string layersRequest(HyprCtl::eHyprCtlOutputFormat format) {
             result += getFormat("Monitor %s:\n", mon->szName.c_str());
             int                                     layerLevel = 0;
             static const std::array<std::string, 4> levelNames = {"background", "bottom", "top", "overlay"};
-            for (auto& level : mon->m_aLayerSurfaceLists) {
+            for (auto& level : mon->m_aLayerSurfaceLayers) {
                 result += getFormat("\tLayer level %i (%s):\n", layerLevel, levelNames[layerLevel].c_str());
 
                 for (auto& layer : level) {
@@ -468,6 +469,59 @@ std::string devicesRequest(HyprCtl::eHyprCtlOutputFormat format) {
     return result;
 }
 
+std::string animationsRequest(HyprCtl::eHyprCtlOutputFormat format) {
+    std::string ret = "";
+    if (format == HyprCtl::eHyprCtlOutputFormat::FORMAT_NORMAL) {
+        ret += "animations:\n";
+
+        for (auto& ac : g_pConfigManager->getAnimationConfig()) {
+            ret += getFormat("\n\tname: %s\n\t\toverriden: %i\n\t\tbezier: %s\n\t\tenabled: %i\n\t\tspeed: %.2f\n\t\tstyle: %s\n", ac.first.c_str(), (int)ac.second.overriden,
+                             ac.second.internalBezier.c_str(), ac.second.internalEnabled, ac.second.internalSpeed, ac.second.internalStyle.c_str());
+        }
+
+        ret += "beziers:\n";
+
+        for (auto& bz : g_pAnimationManager->getAllBeziers()) {
+            ret += getFormat("\n\tname: %s\n", bz.first.c_str());
+        }
+    } else {
+        // json
+
+        ret += "[[";
+        for (auto& ac : g_pConfigManager->getAnimationConfig()) {
+            ret += getFormat(R"#(
+{
+    "name": "%s",
+    "overriden": %s,
+    "bezier": "%s",
+    "enabled": %s,
+    "speed": %.2f,
+    "style": "%s"
+},)#",
+                             ac.first.c_str(), ac.second.overriden ? "true" : "false", ac.second.internalBezier.c_str(), ac.second.internalEnabled ? "true" : "false",
+                             ac.second.internalSpeed, ac.second.internalStyle.c_str());
+        }
+
+        ret[ret.length() - 1] = ']';
+
+        ret += ",\n[";
+
+        for (auto& bz : g_pAnimationManager->getAllBeziers()) {
+            ret += getFormat(R"#(
+{
+    "name": "%s"
+},)#",
+                             bz.first.c_str());
+        }
+
+        ret.pop_back();
+
+        ret += "]";
+    }
+
+    return ret;
+}
+
 std::string bindsRequest(HyprCtl::eHyprCtlOutputFormat format) {
     std::string ret = "";
     if (format == HyprCtl::eHyprCtlOutputFormat::FORMAT_NORMAL) {
@@ -620,8 +674,10 @@ std::string dispatchKeyword(std::string in) {
 
     // decorations will probably need a repaint
     if (COMMAND.contains("decoration:") || COMMAND.contains("border")) {
-        for (auto& m : g_pCompositor->m_vMonitors)
+        for (auto& m : g_pCompositor->m_vMonitors) {
             g_pHyprRenderer->damageMonitor(m.get());
+            g_pLayoutManager->getCurrentLayout()->recalculateMonitor(m->ID);
+        }
     }
 
     Debug::log(LOG, "Hyprctl: keyword %s : %s", COMMAND.c_str(), VALUE.c_str());
@@ -805,6 +861,104 @@ std::string switchXKBLayoutRequest(const std::string& request) {
     return "ok";
 }
 
+std::string dispatchSeterror(std::string request) {
+    CVarList    vars(request, 0, ' ');
+
+    std::string errorMessage = "";
+
+    if (vars.size() < 3) {
+        g_pHyprError->destroy();
+
+        if (vars.size() == 2 && !vars[1].find("dis"))
+            return "var 1 not color or disable";
+
+        return "ok";
+    }
+
+    const CColor COLOR = configStringToInt(vars[1]);
+
+    for (size_t i = 2; i < vars.size(); ++i)
+        errorMessage += vars[i] + ' ';
+
+    if (errorMessage.empty()) {
+        g_pHyprError->destroy();
+    } else {
+        errorMessage.pop_back(); // pop last space
+        g_pHyprError->queueCreate(errorMessage, COLOR);
+    }
+
+    return "ok";
+}
+
+std::string dispatchSetProp(std::string request) {
+    CVarList vars(request, 0, ' ');
+
+    if (vars.size() < 4)
+        return "not enough args";
+
+    const auto PWINDOW = g_pCompositor->getWindowByRegex(vars[1]);
+
+    if (!PWINDOW)
+        return "window not found";
+
+    const auto PROP = vars[2];
+    const auto VAL  = vars[3];
+
+    bool       lock = false;
+
+    if (vars.size() > 4) {
+        if (vars[4].find("lock") == 0) {
+            lock = true;
+        }
+    }
+
+    try {
+        if (PROP == "animationstyle") {
+            PWINDOW->m_sAdditionalConfigData.animationStyle = VAL;
+        } else if (PROP == "rounding") {
+            PWINDOW->m_sAdditionalConfigData.rounding.forceSetIgnoreLocked(configStringToInt(VAL), lock);
+        } else if (PROP == "forcenoblur") {
+            PWINDOW->m_sAdditionalConfigData.forceNoBlur.forceSetIgnoreLocked(configStringToInt(VAL), lock);
+        } else if (PROP == "forceopaque") {
+            PWINDOW->m_sAdditionalConfigData.forceOpaque.forceSetIgnoreLocked(configStringToInt(VAL), lock);
+        } else if (PROP == "forceopaqueoverriden") {
+            PWINDOW->m_sAdditionalConfigData.forceOpaqueOverriden.forceSetIgnoreLocked(configStringToInt(VAL), lock);
+        } else if (PROP == "forceallowsinput") {
+            PWINDOW->m_sAdditionalConfigData.forceAllowsInput.forceSetIgnoreLocked(configStringToInt(VAL), lock);
+        } else if (PROP == "forcenoanims") {
+            PWINDOW->m_sAdditionalConfigData.forceNoAnims.forceSetIgnoreLocked(configStringToInt(VAL), lock);
+        } else if (PROP == "forcenoborder") {
+            PWINDOW->m_sAdditionalConfigData.forceNoBorder.forceSetIgnoreLocked(configStringToInt(VAL), lock);
+        } else if (PROP == "forcenoshadow") {
+            PWINDOW->m_sAdditionalConfigData.forceNoShadow.forceSetIgnoreLocked(configStringToInt(VAL), lock);
+        } else if (PROP == "windowdancecompat") {
+            PWINDOW->m_sAdditionalConfigData.windowDanceCompat.forceSetIgnoreLocked(configStringToInt(VAL), lock);
+        } else if (PROP == "nomaxsize") {
+            PWINDOW->m_sAdditionalConfigData.noMaxSize.forceSetIgnoreLocked(configStringToInt(VAL), lock);
+        } else if (PROP == "dimaround") {
+            PWINDOW->m_sAdditionalConfigData.dimAround.forceSetIgnoreLocked(configStringToInt(VAL), lock);
+        } else if (PROP == "alphaoverride") {
+            PWINDOW->m_sSpecialRenderData.alphaOverride.forceSetIgnoreLocked(configStringToInt(VAL), lock);
+        } else if (PROP == "alpha") {
+            PWINDOW->m_sSpecialRenderData.alpha.forceSetIgnoreLocked(std::stof(VAL), lock);
+        } else if (PROP == "alphainactiveoverride") {
+            PWINDOW->m_sSpecialRenderData.alphaInactiveOverride.forceSetIgnoreLocked(configStringToInt(VAL), lock);
+        } else if (PROP == "alphainactive") {
+            PWINDOW->m_sSpecialRenderData.alphaInactive.forceSetIgnoreLocked(std::stof(VAL), lock);
+        } else if (PROP == "activebordercolor") {
+            PWINDOW->m_sSpecialRenderData.activeBorderColor.forceSetIgnoreLocked(configStringToInt(VAL), lock);
+        } else if (PROP == "inactivebordercolor") {
+            PWINDOW->m_sSpecialRenderData.inactiveBorderColor.forceSetIgnoreLocked(configStringToInt(VAL), lock);
+        } else {
+            return "prop not found";
+        }
+    } catch (std::exception& e) { return "error in parsing prop value: " + std::string(e.what()); }
+
+    g_pCompositor->updateAllWindowsAnimatedDecorationValues();
+
+    return "ok";
+}
+
 std::string dispatchGetOption(std::string request, HyprCtl::eHyprCtlOutputFormat format) {
     std::string curitem = "";
 
@@ -973,6 +1127,12 @@ std::string getReply(std::string request) {
         return cursorPosRequest(format);
     else if (request == "binds")
         return bindsRequest(format);
+    else if (request == "animations")
+        return animationsRequest(format);
+    else if (request.find("setprop") == 0)
+        return dispatchSetProp(request);
+    else if (request.find("seterror") == 0)
+        return dispatchSeterror(request);
     else if (request.find("switchxkblayout") == 0)
         return switchXKBLayoutRequest(request);
     else if (request.find("output") == 0)

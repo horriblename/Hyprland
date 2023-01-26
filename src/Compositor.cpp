@@ -306,8 +306,6 @@ void CCompositor::startCompositor() {
     // Init all the managers BEFORE we start with the wayland server so that ALL of the stuff is initialized
     // properly and we dont get any bad mem reads.
     //
-    Debug::log(LOG, "Creating the CHyprError!");
-    g_pHyprError = std::make_unique<CHyprError>();
 
     Debug::log(LOG, "Creating the KeybindManager!");
     g_pKeybindManager = std::make_unique<CKeybindManager>();
@@ -320,6 +318,9 @@ void CCompositor::startCompositor() {
 
     Debug::log(LOG, "Creating the ConfigManager!");
     g_pConfigManager = std::make_unique<CConfigManager>();
+
+    Debug::log(LOG, "Creating the CHyprError!");
+    g_pHyprError = std::make_unique<CHyprError>();
 
     Debug::log(LOG, "Creating the ThreadManager!");
     g_pThreadManager = std::make_unique<CThreadManager>();
@@ -357,16 +358,28 @@ void CCompositor::startCompositor() {
 
     // get socket, avoid using 0
     for (int candidate = 1; candidate <= 32; candidate++) {
-        if (wl_display_add_socket(m_sWLDisplay, ("wayland-" + std::to_string(candidate)).c_str()) >= 0) {
-            m_szWLDisplaySocket = "wayland-" + std::to_string(candidate);
+        const auto CANDIDATESTR = ("wayland-" + std::to_string(candidate));
+        const auto RETVAL       = wl_display_add_socket(m_sWLDisplay, CANDIDATESTR.c_str());
+        if (RETVAL >= 0) {
+            m_szWLDisplaySocket = CANDIDATESTR;
+            Debug::log(LOG, "wl_display_add_socket for %s succeeded with %i", CANDIDATESTR.c_str(), RETVAL);
             break;
+        } else {
+            Debug::log(WARN, "wl_display_add_socket for %s returned %i: skipping candidate %i", CANDIDATESTR.c_str(), RETVAL, candidate);
         }
+    }
+
+    if (m_szWLDisplaySocket.empty()) {
+        Debug::log(WARN, "All candidates failed, trying wl_display_add_socket_auto");
+        const auto SOCKETSTR = wl_display_add_socket_auto(m_sWLDisplay);
+        if (SOCKETSTR)
+            m_szWLDisplaySocket = SOCKETSTR;
     }
 
     if (m_szWLDisplaySocket.empty()) {
         Debug::log(CRIT, "m_szWLDisplaySocket NULL!");
         wlr_backend_destroy(m_sWLRBackend);
-        throw std::runtime_error("m_szWLDisplaySocket was null! (wl_display_add_socket_auto failed)");
+        throw std::runtime_error("m_szWLDisplaySocket was null! (wl_display_add_socket and wl_display_add_socket_auto failed)");
     }
 
     setenv("WAYLAND_DISPLAY", m_szWLDisplaySocket.c_str(), 1);
@@ -802,8 +815,14 @@ void CCompositor::focusWindow(CWindow* pWindow, wlr_surface* pSurface) {
     if (pWindow->m_bPinned)
         pWindow->m_iWorkspaceID = m_pLastMonitor->activeWorkspace;
 
-    if (!isWorkspaceVisible(pWindow->m_iWorkspaceID))
+    if (!isWorkspaceVisible(pWindow->m_iWorkspaceID)) {
+        // This is to fix incorrect feedback on the focus history.
+        const auto PWORKSPACE            = getWorkspaceByID(pWindow->m_iWorkspaceID);
+        PWORKSPACE->m_pLastFocusedWindow = pWindow;
         g_pKeybindManager->changeworkspace("[internal]" + std::to_string(pWindow->m_iWorkspaceID));
+        // changeworkspace already calls focusWindow
+        return;
+    }
 
     const auto PLASTWINDOW = m_pLastWindow;
     m_pLastWindow          = pWindow;
@@ -860,6 +879,14 @@ void CCompositor::focusWindow(CWindow* pWindow, wlr_surface* pSurface) {
     }
 
     g_pInputManager->recheckIdleInhibitorStatus();
+
+    // move to front of the window history
+    const auto HISTORYPIVOT = std::find_if(m_vWindowFocusHistory.begin(), m_vWindowFocusHistory.end(), [&](const auto& other) { return other == pWindow; });
+    if (HISTORYPIVOT == m_vWindowFocusHistory.end()) {
+        Debug::log(ERR, "BUG THIS: Window %x has no pivot in history", pWindow);
+    } else {
+        std::rotate(m_vWindowFocusHistory.begin(), HISTORYPIVOT, HISTORYPIVOT + 1);
+    }
 }
 
 void CCompositor::focusSurface(wlr_surface* pSurface, CWindow* pWindowOwner) {
@@ -1064,6 +1091,15 @@ int CCompositor::getWindowsOnWorkspace(const int& id) {
     return no;
 }
 
+CWindow* CCompositor::getUrgentWindow() {
+    for (auto& w : m_vWindows) {
+        if (w->m_bIsMapped && w->m_bIsUrgent)
+            return w.get();
+    }
+
+    return nullptr;
+}
+
 bool CCompositor::hasUrgentWindowOnWorkspace(const int& id) {
     for (auto& w : m_vWindows) {
         if (w->m_iWorkspaceID == id && w->m_bIsMapped && w->m_bIsUrgent)
@@ -1168,7 +1204,7 @@ void CCompositor::cleanupFadingOut(const int& monid) {
         // sometimes somehow fucking happens wtf
         bool exists = false;
         for (auto& m : m_vMonitors) {
-            for (auto& lsl : m->m_aLayerSurfaceLists) {
+            for (auto& lsl : m->m_aLayerSurfaceLayers) {
                 for (auto& lsp : lsl) {
                     if (lsp.get() == ls) {
                         exists = true;
@@ -1204,7 +1240,7 @@ void CCompositor::cleanupFadingOut(const int& monid) {
             g_pHyprOpenGL->m_mLayerFramebuffers.erase(ls);
 
             for (auto& m : m_vMonitors) {
-                for (auto& lsl : m->m_aLayerSurfaceLists) {
+                for (auto& lsl : m->m_aLayerSurfaceLayers) {
                     if (!lsl.empty() && std::find_if(lsl.begin(), lsl.end(), [&](std::unique_ptr<SLayerSurface>& other) { return other.get() == ls; }) != lsl.end()) {
                         std::erase_if(lsl, [&](std::unique_ptr<SLayerSurface>& other) { return other.get() == ls; });
                     }
@@ -1530,9 +1566,12 @@ void CCompositor::updateWindowAnimatedDecorationValues(CWindow* pWindow) {
     if (RENDERDATA.isBorderGradient)
         setBorderColor(*RENDERDATA.borderGradient);
     else
-        setBorderColor(pWindow == m_pLastWindow ?
-                           (pWindow->m_sSpecialRenderData.activeBorderColor >= 0 ? CGradientValueData(CColor(pWindow->m_sSpecialRenderData.activeBorderColor)) : *ACTIVECOL) :
-                           (pWindow->m_sSpecialRenderData.inactiveBorderColor >= 0 ? CGradientValueData(CColor(pWindow->m_sSpecialRenderData.inactiveBorderColor)) : *INACTIVECOL));
+        setBorderColor(pWindow == m_pLastWindow ? (pWindow->m_sSpecialRenderData.activeBorderColor.toUnderlying() >= 0 ?
+                                                       CGradientValueData(CColor(pWindow->m_sSpecialRenderData.activeBorderColor.toUnderlying())) :
+                                                       *ACTIVECOL) :
+                                                  (pWindow->m_sSpecialRenderData.inactiveBorderColor.toUnderlying() >= 0 ?
+                                                       CGradientValueData(CColor(pWindow->m_sSpecialRenderData.inactiveBorderColor.toUnderlying())) :
+                                                       *INACTIVECOL));
 
     // opacity
     const auto PWORKSPACE = g_pCompositor->getWorkspaceByID(pWindow->m_iWorkspaceID);
@@ -1541,11 +1580,11 @@ void CCompositor::updateWindowAnimatedDecorationValues(CWindow* pWindow) {
     } else {
         if (pWindow == m_pLastWindow)
             pWindow->m_fActiveInactiveAlpha =
-                pWindow->m_sSpecialRenderData.alphaOverride ? pWindow->m_sSpecialRenderData.alpha : pWindow->m_sSpecialRenderData.alpha * *PACTIVEALPHA;
+                pWindow->m_sSpecialRenderData.alphaOverride.toUnderlying() ? pWindow->m_sSpecialRenderData.alpha.toUnderlying() : pWindow->m_sSpecialRenderData.alpha.toUnderlying() * *PACTIVEALPHA;
         else
-            pWindow->m_fActiveInactiveAlpha = pWindow->m_sSpecialRenderData.alphaInactive != -1 ?
-                (pWindow->m_sSpecialRenderData.alphaInactiveOverride ? pWindow->m_sSpecialRenderData.alphaInactive :
-                                                                       pWindow->m_sSpecialRenderData.alphaInactive * *PINACTIVEALPHA) :
+            pWindow->m_fActiveInactiveAlpha = pWindow->m_sSpecialRenderData.alphaInactive.toUnderlying() != -1 ?
+                (pWindow->m_sSpecialRenderData.alphaInactiveOverride.toUnderlying() ? pWindow->m_sSpecialRenderData.alphaInactive.toUnderlying() :
+                                                                                      pWindow->m_sSpecialRenderData.alphaInactive.toUnderlying() * *PINACTIVEALPHA) :
                 *PINACTIVEALPHA;
     }
 
@@ -1675,12 +1714,12 @@ CMonitor* CCompositor::getMonitorFromString(const std::string& name) {
         currentPlace += offsetLeft;
 
         if (currentPlace < 0) {
-            currentPlace = m_vMonitors.size() - currentPlace;
+            currentPlace = m_vMonitors.size() + currentPlace;
         } else {
             currentPlace = currentPlace % m_vMonitors.size();
         }
 
-        if (currentPlace != std::clamp(currentPlace, 0, (int)m_vMonitors.size())) {
+        if (currentPlace != std::clamp(currentPlace, 0, (int)m_vMonitors.size() - 1)) {
             Debug::log(WARN, "Error in getMonitorFromString: Vaxry's code sucks.");
             currentPlace = std::clamp(currentPlace, 0, (int)m_vMonitors.size() - 1);
         }
@@ -1861,7 +1900,7 @@ void CCompositor::setWindowFullscreen(CWindow* pWindow, bool on, eFullscreenMode
         }
     }
 
-    for (auto& ls : PMONITOR->m_aLayerSurfaceLists[ZWLR_LAYER_SHELL_V1_LAYER_TOP]) {
+    for (auto& ls : PMONITOR->m_aLayerSurfaceLayers[ZWLR_LAYER_SHELL_V1_LAYER_TOP]) {
         if (!ls->fadingOut)
             ls->alpha = pWindow->m_bIsFullscreen && mode == FULLSCREEN_FULL ? 0.f : 1.f;
     }
@@ -1993,7 +2032,7 @@ void CCompositor::warpCursorTo(const Vector2D& pos) {
 
 SLayerSurface* CCompositor::getLayerSurfaceFromWlr(wlr_layer_surface_v1* pLS) {
     for (auto& m : m_vMonitors) {
-        for (auto& lsl : m->m_aLayerSurfaceLists) {
+        for (auto& lsl : m->m_aLayerSurfaceLayers) {
             for (auto& ls : lsl) {
                 if (ls->layerSurface == pLS)
                     return ls.get();
@@ -2012,7 +2051,7 @@ void CCompositor::closeWindow(CWindow* pWindow) {
 
 SLayerSurface* CCompositor::getLayerSurfaceFromSurface(wlr_surface* pSurface) {
     for (auto& m : m_vMonitors) {
-        for (auto& lsl : m->m_aLayerSurfaceLists) {
+        for (auto& lsl : m->m_aLayerSurfaceLayers) {
             for (auto& ls : lsl) {
                 if (ls->layerSurface && ls->layerSurface->surface == pSurface)
                     return ls.get();

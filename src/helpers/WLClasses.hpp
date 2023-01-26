@@ -7,6 +7,11 @@
 #include "SubsurfaceTree.hpp"
 #include "AnimatedVariable.hpp"
 
+struct SLayerRule {
+    std::string targetNamespace = "";
+    std::string rule            = "";
+};
+
 struct SLayerSurface {
     SLayerSurface();
 
@@ -33,6 +38,7 @@ struct SLayerSurface {
     bool                      fadingOut     = false;
     bool                      readyToDelete = false;
     bool                      noProcess     = false;
+    bool                      noAnimations  = false;
 
     bool                      forceBlur = false;
 
@@ -42,16 +48,17 @@ struct SLayerSurface {
     }
 };
 
+class CMonitor;
+
 struct SRenderData {
-    wlr_output* output;
-    timespec*   when;
-    int         x, y;
+    CMonitor* pMonitor;
+    timespec* when;
+    int       x, y;
 
     // for iters
     void*        data    = nullptr;
     wlr_surface* surface = nullptr;
     int          w, h;
-    void*        pMonitor = nullptr;
 
     // for rounding
     bool dontRound = true;

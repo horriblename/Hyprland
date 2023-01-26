@@ -96,6 +96,8 @@ class CCompositor {
     CWindow*                                  m_pLastWindow  = nullptr;
     CMonitor*                                 m_pLastMonitor = nullptr;
 
+    std::vector<CWindow*>                     m_vWindowFocusHistory; // first element is the most recently focused.
+
     SSeat                                     m_sSeat;
 
     bool                                      m_bReadyToProcess = false;
@@ -135,6 +137,7 @@ class CCompositor {
     void           sanityCheckWorkspaces();
     void           updateWorkspaceWindowDecos(const int&);
     int            getWindowsOnWorkspace(const int&);
+    CWindow*       getUrgentWindow();
     bool           hasUrgentWindowOnWorkspace(const int&);
     CWindow*       getFirstWindowOnWorkspace(const int&);
     CWindow*       getFullscreenWindowOnWorkspace(const int&);

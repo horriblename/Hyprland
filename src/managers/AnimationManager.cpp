@@ -67,6 +67,7 @@ void CAnimationManager::tick() {
         } else if (PLAYER) {
             WLRBOXPREV = PLAYER->geometry;
             PMONITOR   = g_pCompositor->getMonitorFromVector(Vector2D(PLAYER->geometry.x, PLAYER->geometry.y) + Vector2D(PLAYER->geometry.width, PLAYER->geometry.height) / 2.f);
+            animationsDisabled = animationsDisabled || PLAYER->noAnimations;
         }
 
         // beziers are with a switch unforto
@@ -201,8 +202,8 @@ void CAnimationManager::tick() {
                     const auto EXTENTS = PDECO->getWindowDecorationExtents();
 
                     wlr_box    dmg = {PWINDOW->m_vRealPosition.vec().x - EXTENTS.topLeft.x, PWINDOW->m_vRealPosition.vec().y - EXTENTS.topLeft.y,
-                                      PWINDOW->m_vRealSize.vec().x + EXTENTS.topLeft.x + EXTENTS.bottomRight.x,
-                                      PWINDOW->m_vRealSize.vec().y + EXTENTS.topLeft.y + EXTENTS.bottomRight.y};
+                                   PWINDOW->m_vRealSize.vec().x + EXTENTS.topLeft.x + EXTENTS.bottomRight.x,
+                                   PWINDOW->m_vRealSize.vec().y + EXTENTS.topLeft.y + EXTENTS.bottomRight.y};
 
                     if (!*PSHADOWIGNOREWINDOW) {
                         // easy, damage the entire box
@@ -223,7 +224,6 @@ void CAnimationManager::tick() {
                 break;
             }
             default: {
-                Debug::log(ERR, "av has damage policy INVALID???");
                 break;
             }
         }
@@ -233,7 +233,8 @@ void CAnimationManager::tick() {
             g_pXWaylandManager->setWindowSize(PWINDOW, PWINDOW->m_vRealSize.goalv());
 
         // manually schedule a frame
-        g_pCompositor->scheduleFrameForMonitor(PMONITOR);
+        if (PMONITOR)
+            g_pCompositor->scheduleFrameForMonitor(PMONITOR);
 
         // check if we did not finish animating. If so, trigger onAnimationEnd.
         if (!av->isBeingAnimated())
@@ -463,4 +464,8 @@ CBezierCurve* CAnimationManager::getBezier(const std::string& name) {
     const auto BEZIER = std::find_if(m_mBezierCurves.begin(), m_mBezierCurves.end(), [&](const auto& other) { return other.first == name; });
 
     return BEZIER == m_mBezierCurves.end() ? &m_mBezierCurves["default"] : &BEZIER->second;
+}
+
+std::unordered_map<std::string, CBezierCurve> CAnimationManager::getAllBeziers() {
+    return m_mBezierCurves;
 }

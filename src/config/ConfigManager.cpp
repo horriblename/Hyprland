@@ -743,6 +743,10 @@ bool windowRuleValid(const std::string& RULE) {
              RULE.find("rounding") != 0 && RULE.find("workspace") != 0 && RULE.find("bordercolor") != 0);
 }
 
+bool layerRuleValid(const std::string& RULE) {
+    return !(RULE != "noanim");
+}
+
 void CConfigManager::handleWindowRule(const std::string& command, const std::string& value) {
     const auto RULE  = removeBeginEndSpacesTabs(value.substr(0, value.find_first_of(',')));
     const auto VALUE = removeBeginEndSpacesTabs(value.substr(value.find_first_of(',') + 1));
@@ -765,6 +769,29 @@ void CConfigManager::handleWindowRule(const std::string& command, const std::str
     }
 
     m_dWindowRules.push_back({RULE, VALUE});
+}
+
+void CConfigManager::handleLayerRule(const std::string& command, const std::string& value) {
+    const auto RULE  = removeBeginEndSpacesTabs(value.substr(0, value.find_first_of(',')));
+    const auto VALUE = removeBeginEndSpacesTabs(value.substr(value.find_first_of(',') + 1));
+
+    // check rule and value
+    if (RULE == "" || VALUE == "") {
+        return;
+    }
+
+    if (RULE == "unset") {
+        std::erase_if(m_dLayerRules, [&](const SLayerRule& other) { return other.targetNamespace == VALUE; });
+        return;
+    }
+
+    if (!layerRuleValid(RULE)) {
+        Debug::log(ERR, "Invalid rule found: %s", RULE.c_str());
+        parseError = "Invalid rule found: " + RULE;
+        return;
+    }
+
+    m_dLayerRules.push_back({VALUE, RULE});
 }
 
 void CConfigManager::handleWindowRuleV2(const std::string& command, const std::string& value) {
@@ -1012,6 +1039,8 @@ std::string CConfigManager::parseKeyword(const std::string& COMMAND, const std::
         handleWindowRule(COMMAND, VALUE);
     else if (COMMAND == "windowrulev2")
         handleWindowRuleV2(COMMAND, VALUE);
+    else if (COMMAND == "layerrule")
+        handleLayerRule(COMMAND, VALUE);
     else if (COMMAND == "bezier")
         handleBezier(COMMAND, VALUE);
     else if (COMMAND == "animation")
@@ -1528,6 +1557,22 @@ std::vector<SWindowRule> CConfigManager::getMatchingRules(CWindow* pWindow) {
     return returns;
 }
 
+std::vector<SLayerRule> CConfigManager::getMatchingRules(SLayerSurface* pLS) {
+    std::vector<SLayerRule> returns;
+
+    for (auto& lr : m_dLayerRules) {
+        std::regex NSCHECK(lr.targetNamespace);
+
+        if (!pLS->layerSurface->_namespace || !std::regex_search(pLS->layerSurface->_namespace, NSCHECK))
+            continue;
+
+        // hit
+        returns.push_back(lr);
+    }
+
+    return returns;
+}
+
 void CConfigManager::dispatchExecOnce() {
     if (firstExecDispatched || isFirstLaunch)
         return;
@@ -1706,4 +1751,8 @@ void CConfigManager::addExecRule(const SExecRequestedRule& rule) {
 
 ICustomConfigValueData::~ICustomConfigValueData() {
     ; // empty
+}
+
+std::unordered_map<std::string, SAnimationPropertyConfig> CConfigManager::getAnimationConfig() {
+    return animationConfig;
 }

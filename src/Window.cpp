@@ -219,6 +219,9 @@ void CWindow::moveToWorkspace(int workspaceID) {
         if (const auto PWORKSPACE = g_pCompositor->getWorkspaceByID(m_iWorkspaceID); PWORKSPACE) {
             g_pEventManager->postEvent(SHyprIPCEvent{"movewindow", getFormat("%x,%s", this, PWORKSPACE->m_szName.c_str())});
         }
+
+        if (const auto PMONITOR = g_pCompositor->getMonitorFromID(m_iMonitorID); PMONITOR)
+            g_pProtocolManager->m_pFractionalScaleProtocolManager->setPreferredScaleForSurface(g_pXWaylandManager->getWindowSurface(this), PMONITOR->scale);
     }
 }
 
@@ -267,6 +270,8 @@ void CWindow::onUnmap() {
     m_fDimPercent.setCallbackOnEnd(unregisterVar);
 
     m_vRealSize.setCallbackOnBegin(nullptr);
+
+    std::erase_if(g_pCompositor->m_vWindowFocusHistory, [&](const auto& other) { return other == this; });
 }
 
 void CWindow::onMap() {
@@ -290,6 +295,8 @@ void CWindow::onMap() {
 
     m_vRealSize.setCallbackOnEnd([&](void* ptr) { g_pHyprOpenGL->onWindowResizeEnd(this); }, false);
     m_vRealSize.setCallbackOnBegin([&](void* ptr) { g_pHyprOpenGL->onWindowResizeStart(this); }, false);
+
+    g_pCompositor->m_vWindowFocusHistory.push_back(this);
 }
 
 void CWindow::setHidden(bool hidden) {
@@ -372,7 +379,7 @@ void CWindow::updateDynamicRules() {
     if (!m_sAdditionalConfigData.forceOpaqueOverriden)
         m_sAdditionalConfigData.forceOpaque = false;
     m_sAdditionalConfigData.forceNoAnims   = false;
-    m_sAdditionalConfigData.animationStyle = "";
+    m_sAdditionalConfigData.animationStyle = std::string("");
     m_sAdditionalConfigData.rounding       = -1;
     m_sAdditionalConfigData.dimAround      = false;
 
