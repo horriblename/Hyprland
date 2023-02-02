@@ -429,10 +429,10 @@ void CInputManager::processMouseDownNormal(wlr_pointer_button_event* e) {
             // clicking on border triggers resize
             if (*PRESIZEONBORDER && g_pCompositor->m_pLastWindow && !m_bLastFocusOnLS && !g_pCompositor->m_pLastWindow->m_bIsFullscreen &&
                 !g_pCompositor->m_pLastWindow->m_bFakeFullscreenState) {
-                const wlr_box real        = {g_pCompositor->m_pLastWindow->m_vRealPosition.vec().x, g_pCompositor->m_pLastWindow->m_vRealPosition.vec().y,
-                                             g_pCompositor->m_pLastWindow->m_vRealSize.vec().x, g_pCompositor->m_pLastWindow->m_vRealSize.vec().y};
                 const auto    mouseCoords = g_pInputManager->getMouseCoordsInternal();
-                if ((!wlr_box_contains_point(&real, mouseCoords.x, mouseCoords.y) || g_pCompositor->m_pLastWindow->isInCurvedCorner(mouseCoords.x, mouseCoords.y))) {
+                const auto    w           = g_pCompositor->vectorToWindowIdeal(mouseCoords);
+                const wlr_box real        = {w->m_vRealPosition.vec().x, w->m_vRealPosition.vec().y, w->m_vRealSize.vec().x, w->m_vRealSize.vec().y};
+                if ((!wlr_box_contains_point(&real, mouseCoords.x, mouseCoords.y) || w->isInCurvedCorner(mouseCoords.x, mouseCoords.y))) {
                     g_pKeybindManager->resizeWithBorder(e);
                     return;
                 }
@@ -1367,7 +1367,7 @@ void CInputManager::setCursorIconOnBorder(CWindow* w) {
             else
                 setCursorImageUntilUnset("top_side");
         } else if (mouseCoords.y > box.y + box.height - CORNER) {
-            if (mouseCoords.x < box.x)
+            if (mouseCoords.x < box.x + CORNER)
                 setCursorImageUntilUnset("bottom_left_corner");
             else if (mouseCoords.x > box.x + box.width - CORNER)
                 setCursorImageUntilUnset("bottom_right_corner");
