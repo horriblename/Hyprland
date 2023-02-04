@@ -63,8 +63,17 @@ void IHyprLayout::onWindowCreatedFloating(CWindow* pWindow) {
             pWindow->m_vRealSize = PMONITOR->vecSize / 2.f;
         }
 
-        pWindow->m_vRealPosition = Vector2D(PMONITOR->vecPosition.x + (PMONITOR->vecSize.x - pWindow->m_vRealSize.goalv().x) / 2.f,
-                                            PMONITOR->vecPosition.y + (PMONITOR->vecSize.y - pWindow->m_vRealSize.goalv().y) / 2.f);
+        if (pWindow->m_bIsX11 && pWindow->m_uSurface.xwayland->override_redirect) {
+
+            if (pWindow->m_uSurface.xwayland->x != 0 && pWindow->m_uSurface.xwayland->y != 0)
+                pWindow->m_vRealPosition = Vector2D{pWindow->m_uSurface.xwayland->x, pWindow->m_uSurface.xwayland->y};
+            else
+                pWindow->m_vRealPosition = Vector2D(PMONITOR->vecPosition.x + (PMONITOR->vecSize.x - pWindow->m_vRealSize.goalv().x) / 2.f,
+                                                    PMONITOR->vecPosition.y + (PMONITOR->vecSize.y - pWindow->m_vRealSize.goalv().y) / 2.f);
+        } else {
+            pWindow->m_vRealPosition = Vector2D(PMONITOR->vecPosition.x + (PMONITOR->vecSize.x - pWindow->m_vRealSize.goalv().x) / 2.f,
+                                                PMONITOR->vecPosition.y + (PMONITOR->vecSize.y - pWindow->m_vRealSize.goalv().y) / 2.f);
+        }
     } else {
         // we respect the size.
         pWindow->m_vRealSize = Vector2D(desiredGeometry.width, desiredGeometry.height);
@@ -108,7 +117,7 @@ void IHyprLayout::onWindowCreatedFloating(CWindow* pWindow) {
         }
     }
 
-    if (pWindow->m_bX11DoesntWantBorders) {
+    if (pWindow->m_bX11DoesntWantBorders || (pWindow->m_bIsX11 && pWindow->m_uSurface.xwayland->override_redirect)) {
         pWindow->m_vRealPosition.setValue(pWindow->m_vRealPosition.goalv());
         pWindow->m_vRealSize.setValue(pWindow->m_vRealSize.goalv());
     }
@@ -146,8 +155,6 @@ void IHyprLayout::onBeginDragWindow() {
         return;
     }
 
-    g_pInputManager->setCursorImageUntilUnset("hand1");
-
     DRAGGINGWINDOW->m_bDraggingTiled = false;
 
     if (!DRAGGINGWINDOW->m_bIsFloating) {
@@ -179,6 +186,8 @@ void IHyprLayout::onBeginDragWindow() {
         else
             m_iGrabbedCorner = 3;
     }
+
+    g_pInputManager->setCursorImageUntilUnset("grab");
 
     g_pHyprRenderer->damageWindow(DRAGGINGWINDOW);
 
@@ -354,6 +363,8 @@ void IHyprLayout::changeWindowFloatingMode(CWindow* pWindow) {
         g_pHyprRenderer->damageMonitor(g_pCompositor->getMonitorFromID(pWindow->m_iMonitorID));
 
         pWindow->m_sSpecialRenderData.rounding = true;
+        pWindow->m_sSpecialRenderData.border   = true;
+        pWindow->m_sSpecialRenderData.decorate = true;
 
         if (pWindow == m_pLastTiledWindow)
             m_pLastTiledWindow = nullptr;

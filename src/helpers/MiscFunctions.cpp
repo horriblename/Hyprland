@@ -4,6 +4,7 @@
 #include "../Compositor.hpp"
 #include <sys/utsname.h>
 #include <iomanip>
+#include <sstream>
 
 #if defined(__DragonFly__) || defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__NetBSD__) || defined(__OpenBSD__)
 #include <sys/sysctl.h>
@@ -516,4 +517,20 @@ int64_t configStringToInt(const std::string& VALUE) {
         return 0;
     }
     return std::stoll(VALUE);
+}
+
+double normalizeAngleRad(double ang) {
+    if (ang > M_PI * 2) {
+        while (ang > M_PI * 2)
+            ang -= M_PI * 2;
+        return ang;
+    }
+
+    if (ang < 0.0) {
+        while (ang < 0.0)
+            ang += M_PI * 2;
+        return ang;
+    }
+
+    return ang;
 }

@@ -56,6 +56,7 @@ void Events::listener_mapWindow(void* owner, void* data) {
     PWINDOW->m_bReadyToDelete = false;
     PWINDOW->m_bFadingOut     = false;
     PWINDOW->m_szTitle        = g_pXWaylandManager->getTitle(PWINDOW);
+    PWINDOW->m_iX11Type       = PWINDOW->m_bIsX11 ? (PWINDOW->m_uSurface.xwayland->override_redirect ? 2 : 1) : 1;
 
     if (g_pInputManager->m_bLastFocusOnLS) // waybar fix
         g_pInputManager->releaseAllMouseButtons();
@@ -816,13 +817,15 @@ void Events::listener_activateXDG(wl_listener* listener, void* data) {
 
     Debug::log(LOG, "Activate request for surface at %x", E->surface);
 
-    if (!wlr_surface_is_xdg_surface(E->surface))
+    if (!wlr_xdg_surface_try_from_wlr_surface(E->surface))
         return;
 
     const auto PWINDOW = g_pCompositor->getWindowFromSurface(E->surface);
 
     if (!PWINDOW || PWINDOW == g_pCompositor->m_pLastWindow)
         return;
+
+    g_pEventManager->postEvent(SHyprIPCEvent{"urgent", getFormat("%x", PWINDOW)});
 
     PWINDOW->m_bIsUrgent = true;
 
@@ -840,8 +843,6 @@ void Events::listener_activateXDG(wl_listener* listener, void* data) {
     g_pCompositor->focusWindow(PWINDOW);
     Vector2D middle = PWINDOW->m_vRealPosition.goalv() + PWINDOW->m_vRealSize.goalv() / 2.f;
     g_pCompositor->warpCursorTo(middle);
-
-    g_pEventManager->postEvent(SHyprIPCEvent{"urgent", getFormat("%x", PWINDOW)});
 }
 
 void Events::listener_activateX11(void* owner, void* data) {
@@ -851,7 +852,23 @@ void Events::listener_activateX11(void* owner, void* data) {
 
     Debug::log(LOG, "X11 Activate request for window %x", PWINDOW);
 
-    if (!*PFOCUSONACTIVATE || PWINDOW->m_iX11Type != 1 || PWINDOW == g_pCompositor->m_pLastWindow)
+    if (PWINDOW->m_iX11Type == 2) {
+
+        Debug::log(LOG, "Unmanaged X11 %x requests activate", PWINDOW);
+
+        if (g_pCompositor->m_pLastWindow && g_pCompositor->m_pLastWindow->getPID() != PWINDOW->getPID())
+            return;
+
+        g_pCompositor->focusWindow(PWINDOW);
+        return;
+    }
+
+    if (PWINDOW == g_pCompositor->m_pLastWindow)
+        return;
+
+    g_pEventManager->postEvent(SHyprIPCEvent{"urgent", getFormat("%x", PWINDOW)});
+
+    if (!*PFOCUSONACTIVATE)
         return;
 
     if (PWINDOW->m_bIsFloating)
@@ -860,8 +877,6 @@ void Events::listener_activateX11(void* owner, void* data) {
     g_pCompositor->focusWindow(PWINDOW);
     Vector2D middle = PWINDOW->m_vRealPosition.goalv() + PWINDOW->m_vRealSize.goalv() / 2.f;
     g_pCompositor->warpCursorTo(middle);
-
-    g_pEventManager->postEvent(SHyprIPCEvent{"urgent", getFormat("%x", PWINDOW)});
 }
 
 void Events::listener_configureX11(void* owner, void* data) {
@@ -1026,7 +1041,12 @@ void Events::listener_requestMinimize(void* owner, void* data) {
 
         const auto E = (wlr_xwayland_minimize_event*)data;
 
+        g_pEventManager->postEvent({"minimize", getFormat("%x,%i", PWINDOW, (int)E->minimize)});
+
         wlr_xwayland_surface_set_minimized(PWINDOW->m_uSurface.xwayland, E->minimize && g_pCompositor->m_pLastWindow != PWINDOW); // fucking DXVK
+    } else {
+        const auto E = (wlr_foreign_toplevel_handle_v1_minimized_event*)data;
+        g_pEventManager->postEvent({"minimize", getFormat("%x,%i", PWINDOW, E ? (int)E->minimized : 1)});
     }
 }
 

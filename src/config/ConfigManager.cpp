@@ -171,6 +171,7 @@ void CConfigManager::setDefaultVars() {
     configValues["binds:scroll_event_delay"].intValue       = 300;
     configValues["binds:workspace_back_and_forth"].intValue = 0;
     configValues["binds:allow_workspace_cycles"].intValue   = 0;
+    configValues["binds:focus_preferred_method"].intValue   = 0;
 
     configValues["gestures:workspace_swipe"].intValue                    = 0;
     configValues["gestures:workspace_swipe_fingers"].intValue            = 3;
@@ -222,6 +223,7 @@ void CConfigManager::setDefaultAnimationVars() {
         INITANIMCFG("windows");
         INITANIMCFG("fade");
         INITANIMCFG("border");
+        INITANIMCFG("borderangle");
         INITANIMCFG("workspaces");
 
         // windows
@@ -248,6 +250,7 @@ void CConfigManager::setDefaultAnimationVars() {
     CREATEANIMCFG("windows", "global");
     CREATEANIMCFG("fade", "global");
     CREATEANIMCFG("border", "global");
+    CREATEANIMCFG("borderangle", "global");
     CREATEANIMCFG("workspaces", "global");
 
     CREATEANIMCFG("windowsIn", "windows");
@@ -449,6 +452,13 @@ void CConfigManager::handleMonitor(const std::string& command, const std::string
         if (ARGS[1] == "disable" || ARGS[1] == "disabled")
             newrule.disabled = true;
         else if (ARGS[1] == "transform") {
+            const auto TSF = std::stoi(ARGS[2]);
+            if (std::clamp(TSF, 0, 7) != TSF) {
+                Debug::log(ERR, "invalid transform %i in monitor", TSF);
+                parseError = "invalid transform";
+                return;
+            }
+
             wl_output_transform transform = (wl_output_transform)std::stoi(ARGS[2]);
 
             // overwrite if exists

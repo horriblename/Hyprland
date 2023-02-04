@@ -166,6 +166,8 @@ void Events::listener_mapLayerSurface(void* owner, void* data) {
     layersurface->fadingOut     = false;
 
     g_pEventManager->postEvent(SHyprIPCEvent{"openlayer", std::string(layersurface->layerSurface->_namespace ? layersurface->layerSurface->_namespace : "")});
+
+    g_pProtocolManager->m_pFractionalScaleProtocolManager->setPreferredScaleForSurface(layersurface->layerSurface->surface, PMONITOR->scale);
 }
 
 void Events::listener_unmapLayerSurface(void* owner, void* data) {
@@ -245,9 +247,8 @@ void Events::listener_unmapLayerSurface(void* owner, void* data) {
                  (int)layersurface->layerSurface->surface->current.width, (int)layersurface->layerSurface->surface->current.height};
     g_pHyprRenderer->damageBox(&geomFixed);
 
-    geomFixed              = {layersurface->geometry.x, layersurface->geometry.y, (int)layersurface->layerSurface->surface->current.width,
-                 (int)layersurface->layerSurface->surface->current.height};
-    layersurface->geometry = geomFixed; // because the surface can overflow... for some reason?
+    geomFixed = {layersurface->geometry.x, layersurface->geometry.y, (int)layersurface->layerSurface->current.actual_width, (int)layersurface->layerSurface->current.actual_height};
+    // layersurface->geometry = geomFixed; // because the surface can overflow... for some reason?
 }
 
 void Events::listener_commitLayerSurface(void* owner, void* data) {
@@ -309,8 +310,10 @@ void Events::listener_commitLayerSurface(void* owner, void* data) {
     layersurface->position = Vector2D(layersurface->geometry.x, layersurface->geometry.y);
 
     // update geom if it changed
-    layersurface->geometry = {layersurface->geometry.x, layersurface->geometry.y, layersurface->layerSurface->surface->current.width,
-                              layersurface->layerSurface->surface->current.height};
+    // layersurface->geometry = {layersurface->geometry.x, layersurface->geometry.y, (int)layersurface->layerSurface->current.actual_width,
+    //                          (int)layersurface->layerSurface->current.actual_height};
 
     g_pHyprRenderer->damageSurface(layersurface->layerSurface->surface, layersurface->position.x, layersurface->position.y);
+
+    g_pProtocolManager->m_pFractionalScaleProtocolManager->setPreferredScaleForSurface(layersurface->layerSurface->surface, PMONITOR->scale);
 }

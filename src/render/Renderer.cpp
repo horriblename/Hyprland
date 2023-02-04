@@ -25,8 +25,7 @@ void renderSurface(struct wlr_surface* surface, int x, int y, void* data) {
             windowBox.height = RDATA->h - y;
     }
 
-    if (RDATA->pWindow)
-        g_pHyprRenderer->calculateUVForWindowSurface(RDATA->pWindow, surface, RDATA->squishOversized);
+    g_pHyprRenderer->calculateUVForSurface(RDATA->pWindow, surface, RDATA->squishOversized);
 
     scaleBox(&windowBox, RDATA->pMonitor->scale);
 
@@ -38,7 +37,7 @@ void renderSurface(struct wlr_surface* surface, int x, int y, void* data) {
     rounding -= 1; // to fix a border issue
 
     if (RDATA->surface && surface == RDATA->surface) {
-        if (wlr_surface_is_xwayland_surface(surface) && !wlr_xwayland_surface_from_wlr_surface(surface)->has_alpha && RDATA->fadeAlpha * RDATA->alpha == 1.f) {
+        if (wlr_xwayland_surface_try_from_wlr_surface(surface) && !wlr_xwayland_surface_try_from_wlr_surface(surface)->has_alpha && RDATA->fadeAlpha * RDATA->alpha == 1.f) {
             g_pHyprOpenGL->renderTexture(TEXTURE, &windowBox, RDATA->fadeAlpha * RDATA->alpha, rounding, true);
         } else {
             if (RDATA->blur)
@@ -311,17 +310,22 @@ void CHyprRenderer::renderWindow(CWindow* pWindow, CMonitor* pMonitor, timespec*
             rounding *= pMonitor->scale;
 
             auto       grad     = g_pHyprOpenGL->m_pCurrentWindow->m_cRealBorderColor;
-            const bool ANIMATED = g_pHyprOpenGL->m_pCurrentWindow->m_fBorderAnimationProgress.isBeingAnimated();
-            float      a1       = renderdata.fadeAlpha * renderdata.alpha * (ANIMATED ? g_pHyprOpenGL->m_pCurrentWindow->m_fBorderAnimationProgress.fl() : 1.f);
+            const bool ANIMATED = g_pHyprOpenGL->m_pCurrentWindow->m_fBorderFadeAnimationProgress.isBeingAnimated();
+            float      a1       = renderdata.fadeAlpha * renderdata.alpha * (ANIMATED ? g_pHyprOpenGL->m_pCurrentWindow->m_fBorderFadeAnimationProgress.fl() : 1.f);
 
-            wlr_box    windowBox = {renderdata.x - pMonitor->vecPosition.x, renderdata.y - pMonitor->vecPosition.y, renderdata.w, renderdata.h};
+            if (g_pHyprOpenGL->m_pCurrentWindow->m_fBorderAngleAnimationProgress.getConfig()->pValues->internalEnabled) {
+                grad.m_fAngle += g_pHyprOpenGL->m_pCurrentWindow->m_fBorderAngleAnimationProgress.fl() * M_PI * 2;
+                grad.m_fAngle = normalizeAngleRad(grad.m_fAngle);
+            }
+
+            wlr_box windowBox = {renderdata.x - pMonitor->vecPosition.x, renderdata.y - pMonitor->vecPosition.y, renderdata.w, renderdata.h};
 
             scaleBox(&windowBox, pMonitor->scale);
 
             g_pHyprOpenGL->renderBorder(&windowBox, grad, rounding, a1);
 
             if (ANIMATED) {
-                float a2 = renderdata.fadeAlpha * renderdata.alpha * (1.f - g_pHyprOpenGL->m_pCurrentWindow->m_fBorderAnimationProgress.fl());
+                float a2 = renderdata.fadeAlpha * renderdata.alpha * (1.f - g_pHyprOpenGL->m_pCurrentWindow->m_fBorderFadeAnimationProgress.fl());
                 g_pHyprOpenGL->renderBorder(&windowBox, g_pHyprOpenGL->m_pCurrentWindow->m_cRealBorderColorPrevious, rounding, a2);
             }
         }
@@ -357,8 +361,8 @@ void CHyprRenderer::renderLayer(SLayerSurface* pLayer, CMonitor* pMonitor, times
     renderdata.blur                  = pLayer->forceBlur;
     renderdata.surface               = pLayer->layerSurface->surface;
     renderdata.decorate              = false;
-    renderdata.w                     = pLayer->layerSurface->surface->current.width;
-    renderdata.h                     = pLayer->layerSurface->surface->current.height;
+    renderdata.w                     = pLayer->geometry.width;
+    renderdata.h                     = pLayer->geometry.height;
     renderdata.blockBlurOptimization = pLayer->layer == ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM || pLayer->layer == ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND;
     wlr_surface_for_each_surface(pLayer->layerSurface->surface, renderSurface, &renderdata);
 
@@ -379,12 +383,31 @@ void CHyprRenderer::renderIMEPopup(SIMEPopup* pPopup, CMonitor* pMonitor, timesp
     wlr_surface_for_each_surface(pPopup->pSurface->surface, renderSurface, &renderdata);
 }
 
+void CHyprRenderer::renderSessionLockSurface(SSessionLockSurface* pSurface, CMonitor* pMonitor, timespec* time) {
+    SRenderData renderdata = {pMonitor, time, pMonitor->vecPosition.x, pMonitor->vecPosition.y};
+
+    renderdata.blur     = false;
+    renderdata.surface  = pSurface->pWlrLockSurface->surface;
+    renderdata.decorate = false;
+    renderdata.w        = pMonitor->vecSize.x;
+    renderdata.h        = pMonitor->vecSize.y;
+
+    wlr_surface_for_each_surface(pSurface->pWlrLockSurface->surface, renderSurface, &renderdata);
+}
+
 void CHyprRenderer::renderAllClientsForMonitor(const int& ID, timespec* time) {
     const auto         PMONITOR    = g_pCompositor->getMonitorFromID(ID);
     static auto* const PDIMSPECIAL = &g_pConfigManager->getConfigValuePtr("decoration:dim_special")->floatValue;
 
     if (!PMONITOR)
         return;
+
+    if (!g_pCompositor->m_sSeat.exclusiveClient && g_pSessionLockManager->isSessionLocked()) {
+        // locked with no exclusive, draw only red
+        wlr_box boxe = {0, 0, INT16_MAX, INT16_MAX};
+        g_pHyprOpenGL->renderRect(&boxe, CColor(1.0, 0.2, 0.2, 1.0));
+        return;
+    }
 
     // Render layer surfaces below windows for monitor
     for (auto& ls : PMONITOR->m_aLayerSurfaceLayers[ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND]) {
@@ -537,10 +560,22 @@ void CHyprRenderer::renderAllClientsForMonitor(const int& ID, timespec* time) {
     }
 
     renderDragIcon(PMONITOR, time);
+
+    if (g_pSessionLockManager->isSessionLocked()) {
+        const auto PSLS = g_pSessionLockManager->getSessionLockSurfaceForMonitor(PMONITOR->ID);
+
+        if (!PSLS) {
+            // locked with no surface, fill with red
+            wlr_box boxe = {0, 0, INT16_MAX, INT16_MAX};
+            g_pHyprOpenGL->renderRect(&boxe, CColor(1.0, 0.2, 0.2, 1.0));
+        } else {
+            renderSessionLockSurface(PSLS, PMONITOR, time);
+        }
+    }
 }
 
-void CHyprRenderer::calculateUVForWindowSurface(CWindow* pWindow, wlr_surface* pSurface, bool main) {
-    if (!pWindow->m_bIsX11) {
+void CHyprRenderer::calculateUVForSurface(CWindow* pWindow, wlr_surface* pSurface, bool main) {
+    if (!pWindow || !pWindow->m_bIsX11) {
         Vector2D uvTL;
         Vector2D uvBR = Vector2D(1, 1);
 
@@ -551,7 +586,7 @@ void CHyprRenderer::calculateUVForWindowSurface(CWindow* pWindow, wlr_surface* p
 
             Vector2D bufferSize = Vector2D(pSurface->buffer->texture->width, pSurface->buffer->texture->height);
 
-            // calculate UV for the basic src_box. Assume dest == size. TODO: don't.
+            // calculate UV for the basic src_box. Assume dest == size. Scale to dest later
             uvTL = Vector2D(bufferSource.x / bufferSize.x, bufferSource.y / bufferSize.y);
             uvBR = Vector2D((bufferSource.x + bufferSource.width) / bufferSize.x, (bufferSource.y + bufferSource.height) / bufferSize.y);
 
@@ -559,6 +594,14 @@ void CHyprRenderer::calculateUVForWindowSurface(CWindow* pWindow, wlr_surface* p
                 uvTL = Vector2D();
                 uvBR = Vector2D(1, 1);
             }
+        }
+
+        const auto DESTVP = Vector2D{pSurface->current.viewport.dst_width, pSurface->current.viewport.dst_height};
+
+        if (DESTVP != Vector2D{} && !pWindow /* Layersurface. TODO: is this correct? */) {
+            const auto DESTSCALE = DESTVP / Vector2D(pSurface->buffer->texture->width, pSurface->buffer->texture->height);
+            uvTL                 = uvTL * DESTSCALE;
+            uvBR                 = uvBR * DESTSCALE;
         }
 
         g_pHyprOpenGL->m_RenderData.primarySurfaceUVTopLeft     = uvTL;
@@ -570,7 +613,7 @@ void CHyprRenderer::calculateUVForWindowSurface(CWindow* pWindow, wlr_surface* p
             g_pHyprOpenGL->m_RenderData.primarySurfaceUVBottomRight = Vector2D(-1, -1);
         }
 
-        if (!main)
+        if (!main || !pWindow)
             return;
 
         wlr_box geom;
@@ -690,7 +733,7 @@ bool CHyprRenderer::attemptDirectScanout(CMonitor* pMonitor) {
 }
 
 void CHyprRenderer::setWindowScanoutMode(CWindow* pWindow) {
-    if (!g_pCompositor->m_sWLRLinuxDMABuf)
+    if (!g_pCompositor->m_sWLRLinuxDMABuf || g_pSessionLockManager->isSessionLocked())
         return;
 
     if (!pWindow->m_bIsFullscreen) {

@@ -2,6 +2,15 @@
 
 #include <regex>
 
+#include <sys/ioctl.h>
+#if defined(__linux__)
+#include <linux/vt.h>
+#elif defined(__NetBSD__) || defined(__OpenBSD__)
+#include <dev/wscons/wsdisplay_usl_io.h>
+#elif defined(__DragonFly__) || defined(__FreeBSD__)
+#include <sys/consio.h>
+#endif
+
 CKeybindManager::CKeybindManager() {
     // initialize all dispatchers
 
@@ -450,13 +459,16 @@ bool CKeybindManager::handleVT(xkb_keysym_t keysym) {
         const unsigned int TTY = keysym - XKB_KEY_XF86Switch_VT_1 + 1;
 
         // vtnr is bugged for some reason.
-        const std::string TTYSTR = execAndGet("head -n 1 /sys/devices/virtual/tty/tty0/active").substr(3);
-        unsigned int      ttynum = 0;
-        try {
-            ttynum = std::stoll(TTYSTR);
-        } catch (std::exception& e) {
-            ; // oops?
-        }
+        unsigned int ttynum = 0;
+#if defined(__linux__) || defined(__NetBSD__) || defined(__OpenBSD__)
+        struct vt_stat st;
+        if (!ioctl(0, VT_GETSTATE, &st))
+            ttynum = st.v_active;
+#elif defined(__DragonFly__) || defined(__FreeBSD__)
+        int vt;
+        if (!ioctl(0, VT_GETACTIVE, &vt))
+            ttynum = vt;
+#endif
 
         if (ttynum == TTY)
             return true;
@@ -1110,9 +1122,8 @@ void CKeybindManager::moveFocusTo(std::string args) {
 
 void CKeybindManager::focusUrgentOrLast(std::string args) {
     const auto PWINDOWURGENT = g_pCompositor->getUrgentWindow();
-    const auto PWINDOWPREV = g_pCompositor->m_pLastWindow
-        ? (g_pCompositor->m_vWindowFocusHistory.size() < 2 ? nullptr : g_pCompositor->m_vWindowFocusHistory[1])
-        : (g_pCompositor->m_vWindowFocusHistory.empty() ? nullptr : g_pCompositor->m_vWindowFocusHistory[0]);
+    const auto PWINDOWPREV   = g_pCompositor->m_pLastWindow ? (g_pCompositor->m_vWindowFocusHistory.size() < 2 ? nullptr : g_pCompositor->m_vWindowFocusHistory[1]) :
+                                                              (g_pCompositor->m_vWindowFocusHistory.empty() ? nullptr : g_pCompositor->m_vWindowFocusHistory[0]);
 
     if (!PWINDOWURGENT && !PWINDOWPREV)
         return;
