@@ -50,6 +50,7 @@ void CInputManager::mouseMoveUnified(uint32_t time, bool refocus) {
     static auto* const PFOLLOWONDND      = &g_pConfigManager->getConfigValuePtr("misc:always_follow_on_dnd")->intValue;
     static auto* const PHOGFOCUS         = &g_pConfigManager->getConfigValuePtr("misc:layers_hog_keyboard_focus")->intValue;
     static auto* const PFLOATBEHAVIOR    = &g_pConfigManager->getConfigValuePtr("input:float_switch_override_focus")->intValue;
+    static auto* const PMOUSEFOCUSMON    = &g_pConfigManager->getConfigValuePtr("misc:mouse_move_focuses_monitor")->intValue;
     static auto* const PRESIZEONBORDER   = &g_pConfigManager->getConfigValuePtr("general:resize_on_borders")->intValue;
     static auto* const PBORDERSIZE       = &g_pConfigManager->getConfigValuePtr("general:border_size")->intValue;
     static auto* const PBORDERGRABEXTEND = &g_pConfigManager->getConfigValuePtr("general:extend_border_grab_area")->intValue;
@@ -145,7 +146,7 @@ void CInputManager::mouseMoveUnified(uint32_t time, bool refocus) {
 
     g_pLayoutManager->getCurrentLayout()->onMouseMove(getMouseCoordsInternal());
 
-    if (PMONITOR && PMONITOR != g_pCompositor->m_pLastMonitor) {
+    if (PMONITOR && PMONITOR != g_pCompositor->m_pLastMonitor && *PMOUSEFOCUSMON) {
         g_pCompositor->setActiveMonitor(PMONITOR);
 
         // set active workspace and deactivate all other in wlr
@@ -787,6 +788,14 @@ void CInputManager::setPointerConfigs() {
                     libinput_device_config_middle_emulation_set_enabled(LIBINPUTDEV, LIBINPUT_CONFIG_MIDDLE_EMULATION_ENABLED);
                 else
                     libinput_device_config_middle_emulation_set_enabled(LIBINPUTDEV, LIBINPUT_CONFIG_MIDDLE_EMULATION_DISABLED);
+
+                const auto TAP_MAP = HASCONFIG ? g_pConfigManager->getDeviceString(devname, "tap_button_map") : g_pConfigManager->getString("input:touchpad:tap_button_map");
+                if (TAP_MAP == "" || TAP_MAP == "lrm")
+                    libinput_device_config_tap_set_button_map(LIBINPUTDEV, LIBINPUT_CONFIG_TAP_MAP_LRM);
+                else if (TAP_MAP == "lmr")
+                    libinput_device_config_tap_set_button_map(LIBINPUTDEV, LIBINPUT_CONFIG_TAP_MAP_LMR);
+                else
+                    Debug::log(WARN, "Tap button mapping unknown");
             }
 
             const auto SCROLLMETHOD = HASCONFIG ? g_pConfigManager->getDeviceString(devname, "scroll_method") : g_pConfigManager->getString("input:scroll_method");

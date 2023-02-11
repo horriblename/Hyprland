@@ -246,9 +246,6 @@ void Events::listener_unmapLayerSurface(void* owner, void* data) {
     geomFixed = {layersurface->geometry.x + (int)PMONITOR->vecPosition.x, layersurface->geometry.y + (int)PMONITOR->vecPosition.y,
                  (int)layersurface->layerSurface->surface->current.width, (int)layersurface->layerSurface->surface->current.height};
     g_pHyprRenderer->damageBox(&geomFixed);
-
-    geomFixed = {layersurface->geometry.x, layersurface->geometry.y, (int)layersurface->layerSurface->current.actual_width, (int)layersurface->layerSurface->current.actual_height};
-    // layersurface->geometry = geomFixed; // because the surface can overflow... for some reason?
 }
 
 void Events::listener_commitLayerSurface(void* owner, void* data) {
@@ -305,13 +302,20 @@ void Events::listener_commitLayerSurface(void* owner, void* data) {
         g_pHyprRenderer->arrangeLayersForMonitor(PMONITOR->ID);
 
         PMONITOR->scheduledRecalc = true;
+    } else {
+        layersurface->position = Vector2D(layersurface->geometry.x, layersurface->geometry.y);
+
+        // update geom if it changed
+        if (layersurface->layerSurface->surface->current.scale == 1 && PMONITOR->scale != 1.f && layersurface->layerSurface->surface->current.viewport.has_dst) {
+            // fractional scaling. Dirty hack.
+            layersurface->geometry = {layersurface->geometry.x, layersurface->geometry.y, (int)(layersurface->layerSurface->surface->current.viewport.dst_width),
+                                      (int)(layersurface->layerSurface->surface->current.viewport.dst_height)};
+        } else {
+            // this is because some apps like e.g. rofi-lbonn can't fucking use the protocol correctly.
+            layersurface->geometry = {layersurface->geometry.x, layersurface->geometry.y, (int)layersurface->layerSurface->surface->current.width,
+                                      (int)layersurface->layerSurface->surface->current.height};
+        }
     }
-
-    layersurface->position = Vector2D(layersurface->geometry.x, layersurface->geometry.y);
-
-    // update geom if it changed
-    // layersurface->geometry = {layersurface->geometry.x, layersurface->geometry.y, (int)layersurface->layerSurface->current.actual_width,
-    //                          (int)layersurface->layerSurface->current.actual_height};
 
     g_pHyprRenderer->damageSurface(layersurface->layerSurface->surface, layersurface->position.x, layersurface->position.y);
 
