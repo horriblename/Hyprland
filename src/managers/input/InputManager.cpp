@@ -304,7 +304,7 @@ void CInputManager::mouseMoveUnified(uint32_t time, bool refocus) {
 
     if (pFoundWindow) {
         // change cursor icon if hovering over border, skip if mouse bind is active
-        if (*PRESIZEONBORDER && *PRESIZECURSORICON && !pFoundWindow->m_bIsFullscreen && !g_pKeybindManager->m_bIsMouseBindActive) {
+        if (*PRESIZEONBORDER && *PRESIZECURSORICON && !pFoundWindow->m_bIsFullscreen && !g_pKeybindManager->m_bIsMouseBindActive && !pFoundWindow->hasPopupAt(mouseCoords)) {
             setCursorIconOnBorder(pFoundWindow);
         }
 
@@ -435,6 +435,20 @@ void CInputManager::processMouseDownNormal(wlr_pointer_button_event* e) {
     if (!PASS && !*PPASSMOUSE)
         return;
 
+    // clicking on border triggers resize
+    // TODO detect click on LS properly
+    if (*PRESIZEONBORDER && !m_bLastFocusOnLS) {
+        const auto mouseCoords = g_pInputManager->getMouseCoordsInternal();
+        const auto w           = g_pCompositor->vectorToWindowIdeal(mouseCoords);
+        if (w && !w->m_bIsFullscreen) {
+            const wlr_box real = {w->m_vRealPosition.vec().x, w->m_vRealPosition.vec().y, w->m_vRealSize.vec().x, w->m_vRealSize.vec().y};
+            if ((!wlr_box_contains_point(&real, mouseCoords.x, mouseCoords.y) || w->isInCurvedCorner(mouseCoords.x, mouseCoords.y)) && !w->hasPopupAt(mouseCoords)) {
+                g_pKeybindManager->resizeWithBorder(e);
+                return;
+            }
+        }
+    }
+
     switch (e->state) {
         case WLR_BUTTON_PRESSED:
             if (*PFOLLOWMOUSE == 3) // don't refocus on full loose
@@ -446,18 +460,6 @@ void CInputManager::processMouseDownNormal(wlr_pointer_button_event* e) {
             // if clicked on a floating window make it top
             if (g_pCompositor->m_pLastWindow && g_pCompositor->m_pLastWindow->m_bIsFloating)
                 g_pCompositor->moveWindowToTop(g_pCompositor->m_pLastWindow);
-
-            // clicking on border triggers resize
-            if (*PRESIZEONBORDER && g_pCompositor->m_pLastWindow && !m_bLastFocusOnLS && !g_pCompositor->m_pLastWindow->m_bIsFullscreen &&
-                !g_pCompositor->m_pLastWindow->m_bFakeFullscreenState) {
-                const auto    mouseCoords = g_pInputManager->getMouseCoordsInternal();
-                const auto    w           = g_pCompositor->vectorToWindowIdeal(mouseCoords);
-                const wlr_box real        = {w->m_vRealPosition.vec().x, w->m_vRealPosition.vec().y, w->m_vRealSize.vec().x, w->m_vRealSize.vec().y};
-                if ((!wlr_box_contains_point(&real, mouseCoords.x, mouseCoords.y) || w->isInCurvedCorner(mouseCoords.x, mouseCoords.y))) {
-                    g_pKeybindManager->resizeWithBorder(e);
-                    return;
-                }
-            }
 
             break;
         case WLR_BUTTON_RELEASED: break;
