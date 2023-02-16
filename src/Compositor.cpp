@@ -197,6 +197,8 @@ CCompositor::CCompositor() {
         throw std::runtime_error("wlr_headless_backend_create() failed!");
     }
 
+    wlr_single_pixel_buffer_manager_v1_create(m_sWLDisplay);
+
     wlr_multi_backend_add(m_sWLRBackend, m_sWLRHeadlessBackend);
 }
 
@@ -879,6 +881,11 @@ void CCompositor::focusSurface(wlr_surface* pSurface, CWindow* pWindowOwner) {
         (pWindowOwner && m_sSeat.seat->keyboard_state.focused_surface == g_pXWaylandManager->getWindowSurface(pWindowOwner)))
         return; // Don't focus when already focused on this.
 
+    if (g_pSessionLockManager->isSessionLocked()) {
+        wlr_seat_keyboard_clear_focus(m_sSeat.seat);
+        m_pLastFocus = nullptr;
+    }
+
     // Unfocus last surface if should
     if (m_pLastFocus && !pWindowOwner)
         g_pXWaylandManager->activateSurface(m_pLastFocus, false);
@@ -888,7 +895,7 @@ void CCompositor::focusSurface(wlr_surface* pSurface, CWindow* pWindowOwner) {
         g_pEventManager->postEvent(SHyprIPCEvent{"activewindow", ","}); // unfocused
         g_pEventManager->postEvent(SHyprIPCEvent{"activewindowv2", ","});
         g_pInputManager->m_sIMERelay.onKeyboardFocus(nullptr);
-        g_pCompositor->m_pLastFocus = nullptr;
+        m_pLastFocus = nullptr;
         return;
     }
 
@@ -1935,6 +1942,8 @@ void CCompositor::setWindowFullscreen(CWindow* pWindow, bool on, eFullscreenMode
 
     // DMAbuf stuff for direct scanout
     g_pHyprRenderer->setWindowScanoutMode(pWindow);
+
+    g_pConfigManager->ensureVRR(PMONITOR);
 }
 
 void CCompositor::moveUnmanagedX11ToWindows(CWindow* pWindow) {
