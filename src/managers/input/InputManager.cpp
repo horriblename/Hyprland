@@ -385,7 +385,7 @@ void CInputManager::processMouseRequest(wlr_seat_pointer_request_set_cursor_even
         g_pHyprRenderer->m_bWindowRequestedCursorHide = false;
     }
 
-    if (m_bCursorImageOverriden) {
+    if (m_bCursorImageOverridenBy != CURSORICONBY_NONE) {
         return;
     }
 
@@ -1293,16 +1293,19 @@ void CInputManager::destroySwitch(SSwitchDevice* pDevice) {
     m_lSwitches.remove(*pDevice);
 }
 
-void CInputManager::setCursorImageUntilUnset(std::string name) {
-    wlr_xcursor_manager_set_cursor_image(g_pCompositor->m_sWLRXCursorMgr, name.c_str(), g_pCompositor->m_sWLRCursor);
-    m_bCursorImageOverriden = true;
-}
-
-void CInputManager::unsetCursorImage() {
-    if (!m_bCursorImageOverriden)
+void CInputManager::setCursorImageUntilUnset(std::string name, eCursorIconSetBy source) {
+    if (source < m_bCursorImageOverridenBy)
         return;
 
-    m_bCursorImageOverriden = false;
+    wlr_xcursor_manager_set_cursor_image(g_pCompositor->m_sWLRXCursorMgr, name.c_str(), g_pCompositor->m_sWLRCursor);
+    m_bCursorImageOverridenBy = source;
+}
+
+void CInputManager::unsetCursorImage(eCursorIconSetBy source) {
+    if (source != m_bCursorImageOverridenBy)
+        return;
+
+    m_bCursorImageOverridenBy = CURSORICONBY_NONE;
     if (!g_pHyprRenderer->m_bWindowRequestedCursorHide)
         wlr_xcursor_manager_set_cursor_image(g_pCompositor->m_sWLRXCursorMgr, "left_ptr", g_pCompositor->m_sWLRCursor);
 }
@@ -1374,42 +1377,48 @@ void CInputManager::setCursorIconOnBorder(CWindow* w) {
     const auto CORNER      = *PROUNDING + *PBORDERSIZE + 10;
     const auto mouseCoords = getMouseCoordsInternal();
     wlr_box    box         = {w->m_vRealPosition.vec().x, w->m_vRealPosition.vec().y, w->m_vRealSize.vec().x, w->m_vRealSize.vec().y};
-    if (wlr_box_contains_point(&box, mouseCoords.x, mouseCoords.y)) {
-        if (w->isInCurvedCorner(mouseCoords.x, mouseCoords.y)) {
-            if (mouseCoords.y < box.y + CORNER) {
-                if (mouseCoords.x < box.x + CORNER)
-                    setCursorImageUntilUnset("top_left_corner");
-                else
-                    setCursorImageUntilUnset("top_right_corner");
-            } else {
-                if (mouseCoords.x < box.x + CORNER)
-                    setCursorImageUntilUnset("bottom_left_corner");
-                else
-                    setCursorImageUntilUnset("bottom_right_corner");
+
+    if (m_bCursorImageOverridenBy > CURSORICONBY_BORDERHOVER)
+        return;
+
+    if (wlr_box_contains_point(&box, mouseCoords.x, mouseCoords.y) && !w->isInCurvedCorner(mouseCoords.x, mouseCoords.y)) {
+        unsetCursorImage(CURSORICONBY_BORDERHOVER);
+    } else {
+        if (wlr_box_contains_point(&box, mouseCoords.x, mouseCoords.y)) {
+            if (w->isInCurvedCorner(mouseCoords.x, mouseCoords.y)) {
+                if (mouseCoords.y < box.y + CORNER) {
+                    if (mouseCoords.x < box.x + CORNER)
+                        setCursorImageUntilUnset("top_left_corner", CURSORICONBY_BORDERHOVER);
+                    else
+                        setCursorImageUntilUnset("top_right_corner", CURSORICONBY_BORDERHOVER);
+                } else {
+                    if (mouseCoords.x < box.x + CORNER)
+                        setCursorImageUntilUnset("bottom_left_corner", CURSORICONBY_BORDERHOVER);
+                    else
+                        setCursorImageUntilUnset("bottom_right_corner", CURSORICONBY_BORDERHOVER);
+                }
             }
         } else {
-            unsetCursorImage();
-        }
-    } else {
-        if (mouseCoords.y < box.y + CORNER) {
-            if (mouseCoords.x < box.x + CORNER)
-                setCursorImageUntilUnset("top_left_corner");
-            else if (mouseCoords.x > box.x + box.width - CORNER)
-                setCursorImageUntilUnset("top_right_corner");
-            else
-                setCursorImageUntilUnset("top_side");
-        } else if (mouseCoords.y > box.y + box.height - CORNER) {
-            if (mouseCoords.x < box.x + CORNER)
-                setCursorImageUntilUnset("bottom_left_corner");
-            else if (mouseCoords.x > box.x + box.width - CORNER)
-                setCursorImageUntilUnset("bottom_right_corner");
-            else
-                setCursorImageUntilUnset("bottom_side");
-        } else {
-            if (mouseCoords.x < box.x + CORNER)
-                setCursorImageUntilUnset("left_side");
-            else if (mouseCoords.x > box.x + box.width - CORNER)
-                setCursorImageUntilUnset("right_side");
+            if (mouseCoords.y < box.y + CORNER) {
+                if (mouseCoords.x < box.x + CORNER)
+                    setCursorImageUntilUnset("top_left_corner", CURSORICONBY_BORDERHOVER);
+                else if (mouseCoords.x > box.x + box.width - CORNER)
+                    setCursorImageUntilUnset("top_right_corner", CURSORICONBY_BORDERHOVER);
+                else
+                    setCursorImageUntilUnset("top_side", CURSORICONBY_BORDERHOVER);
+            } else if (mouseCoords.y > box.y + box.height - CORNER) {
+                if (mouseCoords.x < box.x + CORNER)
+                    setCursorImageUntilUnset("bottom_left_corner", CURSORICONBY_BORDERHOVER);
+                else if (mouseCoords.x > box.x + box.width - CORNER)
+                    setCursorImageUntilUnset("bottom_right_corner", CURSORICONBY_BORDERHOVER);
+                else
+                    setCursorImageUntilUnset("bottom_side", CURSORICONBY_BORDERHOVER);
+            } else {
+                if (mouseCoords.x < box.x + CORNER)
+                    setCursorImageUntilUnset("left_side", CURSORICONBY_BORDERHOVER);
+                else if (mouseCoords.x > box.x + box.width - CORNER)
+                    setCursorImageUntilUnset("right_side", CURSORICONBY_BORDERHOVER);
+            }
         }
     }
 }
