@@ -635,11 +635,25 @@ void CKeybindManager::toggleActiveFloating(std::string args) {
     if (g_pCompositor->isWorkspaceSpecial(PWINDOW->m_iWorkspaceID))
         return;
 
-    PWINDOW->m_bIsFloating = !PWINDOW->m_bIsFloating;
+    if (PWINDOW->m_sGroupData.pNextWindow && PWINDOW->m_sGroupData.pNextWindow != PWINDOW) {
 
-    PWINDOW->updateDynamicRules();
+        const auto PCURRENT     = PWINDOW->getGroupCurrent();
+        PCURRENT->m_bIsFloating = !PCURRENT->m_bIsFloating;
+        g_pLayoutManager->getCurrentLayout()->changeWindowFloatingMode(PCURRENT);
 
-    g_pLayoutManager->getCurrentLayout()->changeWindowFloatingMode(PWINDOW);
+        CWindow* curr = PCURRENT->m_sGroupData.pNextWindow;
+        while (curr != PCURRENT) {
+            curr->m_bIsFloating = PCURRENT->m_bIsFloating;
+            curr->updateDynamicRules();
+            curr = curr->m_sGroupData.pNextWindow;
+        }
+    } else {
+        PWINDOW->m_bIsFloating = !PWINDOW->m_bIsFloating;
+
+        PWINDOW->updateDynamicRules();
+
+        g_pLayoutManager->getCurrentLayout()->changeWindowFloatingMode(PWINDOW);
+    }
 }
 
 void CKeybindManager::centerWindow(std::string args) {
@@ -792,6 +806,7 @@ void CKeybindManager::changeworkspace(std::string args) {
             PWORKSPACETOCHANGETO->startAnim(true, ANIMTOLEFT);
 
             g_pEventManager->postEvent(SHyprIPCEvent{"workspace", PWORKSPACETOCHANGETO->m_szName});
+            EMIT_HOOK_EVENT("workspace", PWORKSPACETOCHANGETO);
         }
 
         // If the monitor is not the one our cursor's at, warp to it.
@@ -885,6 +900,7 @@ void CKeybindManager::changeworkspace(std::string args) {
         g_pCompositor->warpCursorTo(PMONITOR->vecPosition + PMONITOR->vecSize / 2.f);
 
     g_pEventManager->postEvent(SHyprIPCEvent{"workspace", PWORKSPACE->m_szName});
+    EMIT_HOOK_EVENT("workspace", PWORKSPACE);
 
     g_pCompositor->setActiveMonitor(PMONITOR);
 
@@ -1066,6 +1082,7 @@ void CKeybindManager::moveActiveToWorkspaceSilent(std::string args) {
 
     // manually post event cuz it got ignored above
     g_pEventManager->postEvent(SHyprIPCEvent{"movewindow", getFormat("%x,%s", PWINDOW, PWORKSPACE->m_szName.c_str())});
+    EMIT_HOOK_EVENT("moveWindow", (std::vector<void*>{PWINDOW, PWORKSPACE}));
 
     PWINDOW->m_iWorkspaceID   = OLDWORKSPACEIDRETURN;
     const auto PNEXTCANDIDATE = g_pLayoutManager->getCurrentLayout()->getNextWindowCandidate(PWINDOW);
@@ -1243,18 +1260,63 @@ void CKeybindManager::moveActiveTo(std::string args) {
 }
 
 void CKeybindManager::toggleGroup(std::string args) {
-    SLayoutMessageHeader header;
-    header.pWindow = g_pCompositor->m_pLastWindow;
-    g_pLayoutManager->getCurrentLayout()->layoutMessage(header, "togglegroup");
+    const auto PWINDOW = g_pCompositor->m_pLastWindow;
+
+    if (!PWINDOW)
+        return;
+
+    if (!PWINDOW->m_sGroupData.pNextWindow) {
+        PWINDOW->m_sGroupData.pNextWindow = PWINDOW;
+        PWINDOW->m_sGroupData.head        = true;
+
+        PWINDOW->m_dWindowDecorations.emplace_back(std::make_unique<CHyprGroupBarDecoration>(PWINDOW));
+
+        PWINDOW->updateWindowDecos();
+    } else {
+        if (PWINDOW->m_sGroupData.pNextWindow == PWINDOW) {
+            PWINDOW->m_sGroupData.pNextWindow = nullptr;
+            PWINDOW->updateWindowDecos();
+        } else {
+            // enum all windows, remove their group state, readd to layout.
+            CWindow*              curr = PWINDOW;
+            std::vector<CWindow*> members;
+            do {
+                const auto PLASTWIN                = curr;
+                curr                               = curr->m_sGroupData.pNextWindow;
+                PLASTWIN->m_sGroupData.pNextWindow = nullptr;
+                curr->setHidden(false);
+                members.push_back(curr);
+            } while (curr != PWINDOW);
+
+            for (auto& w : members) {
+                if (w->m_sGroupData.head)
+                    g_pLayoutManager->getCurrentLayout()->onWindowRemoved(curr);
+                w->m_sGroupData.head = false;
+            }
+
+            for (auto& w : members) {
+                g_pLayoutManager->getCurrentLayout()->onWindowCreated(w);
+                w->updateWindowDecos();
+            }
+        }
+    }
+
+    g_pCompositor->updateAllWindowsAnimatedDecorationValues();
 }
 
 void CKeybindManager::changeGroupActive(std::string args) {
-    SLayoutMessageHeader header;
-    header.pWindow = g_pCompositor->m_pLastWindow;
-    if (args == "b")
-        g_pLayoutManager->getCurrentLayout()->layoutMessage(header, "changegroupactiveb");
-    else
-        g_pLayoutManager->getCurrentLayout()->layoutMessage(header, "changegroupactivef");
+    const auto PWINDOW = g_pCompositor->m_pLastWindow;
+
+    if (!PWINDOW)
+        return;
+
+    if (!PWINDOW->m_sGroupData.pNextWindow)
+        return;
+
+    if (PWINDOW->m_sGroupData.pNextWindow == PWINDOW)
+        return;
+
+    PWINDOW->setGroupCurrent(PWINDOW->m_sGroupData.pNextWindow);
 }
 
 void CKeybindManager::toggleSplit(std::string args) {
@@ -1372,7 +1434,7 @@ void CKeybindManager::workspaceOpt(std::string args) {
             ptrs.push_back(w.get());
 
         for (auto& w : ptrs) {
-            if (!w->m_bIsMapped || w->m_iWorkspaceID != PWORKSPACE->m_iID)
+            if (!w->m_bIsMapped || w->m_iWorkspaceID != PWORKSPACE->m_iID || w->isHidden())
                 continue;
 
             if (!w->m_bRequestsFloat && w->m_bIsFloating != PWORKSPACE->m_bDefaultFloating) {
@@ -1702,6 +1764,7 @@ void CKeybindManager::setSubmap(std::string submap) {
         m_szCurrentSelectedSubmap = "";
         Debug::log(LOG, "Reset active submap to the default one.");
         g_pEventManager->postEvent(SHyprIPCEvent{"submap", ""});
+        EMIT_HOOK_EVENT("submap", m_szCurrentSelectedSubmap);
         return;
     }
 
@@ -1710,6 +1773,7 @@ void CKeybindManager::setSubmap(std::string submap) {
             m_szCurrentSelectedSubmap = submap;
             Debug::log(LOG, "Changed keybind submap to %s", submap.c_str());
             g_pEventManager->postEvent(SHyprIPCEvent{"submap", submap});
+            EMIT_HOOK_EVENT("submap", m_szCurrentSelectedSubmap);
             return;
         }
     }
