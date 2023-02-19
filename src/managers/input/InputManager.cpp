@@ -385,7 +385,7 @@ void CInputManager::processMouseRequest(wlr_seat_pointer_request_set_cursor_even
         g_pHyprRenderer->m_bWindowRequestedCursorHide = false;
     }
 
-    if (m_bCursorImageOverridenBy != CURSORICONBY_NONE) {
+    if (m_bCursorImageOverriden) {
         return;
     }
 
@@ -1287,19 +1287,16 @@ void CInputManager::destroySwitch(SSwitchDevice* pDevice) {
     m_lSwitches.remove(*pDevice);
 }
 
-void CInputManager::setCursorImageUntilUnset(std::string name, eCursorIconSetBy source) {
-    if (source < m_bCursorImageOverridenBy)
-        return;
-
+void CInputManager::setCursorImageUntilUnset(std::string name) {
     wlr_xcursor_manager_set_cursor_image(g_pCompositor->m_sWLRXCursorMgr, name.c_str(), g_pCompositor->m_sWLRCursor);
-    m_bCursorImageOverridenBy = source;
+    m_bCursorImageOverriden = true;
 }
 
-void CInputManager::unsetCursorImage(eCursorIconSetBy source) {
-    if (source != m_bCursorImageOverridenBy)
+void CInputManager::unsetCursorImage() {
+    if (!m_bCursorImageOverriden)
         return;
 
-    m_bCursorImageOverridenBy = CURSORICONBY_NONE;
+    m_bCursorImageOverriden = false;
     if (!g_pHyprRenderer->m_bWindowRequestedCursorHide)
         wlr_xcursor_manager_set_cursor_image(g_pCompositor->m_sWLRXCursorMgr, "left_ptr", g_pCompositor->m_sWLRCursor);
 }

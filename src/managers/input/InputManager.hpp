@@ -160,8 +160,8 @@ class CInputManager {
     bool shouldIgnoreVirtualKeyboard(SKeyboard*);
 
     // for special cursors that we choose
-    void        setCursorImageUntilUnset(std::string, eCursorIconSetBy);
-    void        unsetCursorImage(eCursorIconSetBy);
+    void        setCursorImageUntilUnset(std::string);
+    void        unsetCursorImage();
 
     std::string deviceNameToInternalString(std::string);
     std::string getNameForNewDevice(std::string);
