@@ -7,24 +7,27 @@
 #include "../../helpers/Timer.hpp"
 #include "InputMethodRelay.hpp"
 
-enum eClickBehaviorMode
-{
+enum eClickBehaviorMode {
     CLICKMODE_DEFAULT = 0,
     CLICKMODE_KILL
 };
 
-enum eMouseBindMode
-{
+enum eMouseBindMode {
     MBIND_INVALID = -1,
     MBIND_MOVE    = 0,
     MBIND_RESIZE
 };
 
-// higher value means higher priority
-enum eCursorIconSetBy {
-    CURSORICONBY_NONE = 0,
-    CURSORICONBY_BORDERHOVER,
-    CURSORICONBY_DRAGWINDOW,
+enum eBorderIconDirection {
+    BORDERICON_NONE,
+    BORDERICON_UP,
+    BORDERICON_DOWN,
+    BORDERICON_LEFT,
+    BORDERICON_RIGHT,
+    BORDERICON_UP_LEFT,
+    BORDERICON_DOWN_LEFT,
+    BORDERICON_UP_RIGHT,
+    BORDERICON_DOWN_RIGHT,
 };
 
 struct STouchData {
@@ -172,7 +175,8 @@ class CInputManager {
     bool m_bLastInputTouch = false;
 
   private:
-    eCursorIconSetBy m_bCursorImageOverridenBy = CURSORICONBY_NONE;
+    bool                 m_bCursorImageOverriden = false;
+    eBorderIconDirection m_eBorderIconDirection  = BORDERICON_NONE;
 
     // for click behavior override
     eClickBehaviorMode m_ecbClickBehavior      = CLICKMODE_DEFAULT;
@@ -203,6 +207,7 @@ class CInputManager {
     // swipe
     void beginWorkspaceSwipe();
 
+    void setBorderCursorIcon(eBorderIconDirection);
     void setCursorIconOnBorder(CWindow* w);
 
     friend class CKeybindManager;
