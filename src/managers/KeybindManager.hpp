@@ -8,6 +8,7 @@
 
 class CInputManager;
 class CConfigManager;
+class CPluginSystem;
 
 struct SKeybind {
     std::string key     = "";
@@ -25,7 +26,8 @@ struct SKeybind {
     bool shadowed = false;
 };
 
-enum eFocusWindowMode {
+enum eFocusWindowMode
+{
     MODE_CLASS_REGEX = 0,
     MODE_TITLE_REGEX,
     MODE_ADDRESS,
@@ -135,6 +137,8 @@ class CKeybindManager {
     static void     mouse(std::string);
     static void     bringActiveToTop(std::string);
     static void     lockGroups(std::string);
+    static void     moveIntoGroup(std::string);
+    static void     moveOutOfGroup(std::string);
 
     friend class CCompositor;
     friend class CInputManager;

@@ -206,18 +206,25 @@ void IHyprLayout::onBeginDragWindow() {
 
     // get the grab corner
     if (m_vBeginDragXY.x < m_vBeginDragPositionXY.x + m_vBeginDragSizeXY.x / 2.0) {
-        if (m_vBeginDragXY.y < m_vBeginDragPositionXY.y + m_vBeginDragSizeXY.y / 2.0)
+        if (m_vBeginDragXY.y < m_vBeginDragPositionXY.y + m_vBeginDragSizeXY.y / 2.0) {
             m_eGrabbedCorner = CORNER_TOPLEFT;
-        else
+            g_pInputManager->setCursorImageUntilUnset("nw-resize");
+        } else {
             m_eGrabbedCorner = CORNER_BOTTOMLEFT;
+            g_pInputManager->setCursorImageUntilUnset("sw-resize");
+        }
     } else {
-        if (m_vBeginDragXY.y < m_vBeginDragPositionXY.y + m_vBeginDragSizeXY.y / 2.0)
+        if (m_vBeginDragXY.y < m_vBeginDragPositionXY.y + m_vBeginDragSizeXY.y / 2.0) {
             m_eGrabbedCorner = CORNER_TOPRIGHT;
-        else
+            g_pInputManager->setCursorImageUntilUnset("ne-resize");
+        } else {
             m_eGrabbedCorner = CORNER_BOTTOMRIGHT;
+            g_pInputManager->setCursorImageUntilUnset("se-resize");
+        }
     }
 
-    g_pInputManager->setCursorImageUntilUnset("grab");
+    if (g_pInputManager->dragMode != MBIND_RESIZE)
+        g_pInputManager->setCursorImageUntilUnset("grab");
 
     g_pHyprRenderer->damageWindow(DRAGGINGWINDOW);
 
@@ -265,7 +272,8 @@ void IHyprLayout::onMouseMove(const Vector2D& mousePos) {
     const auto DELTA     = Vector2D(mousePos.x - m_vBeginDragXY.x, mousePos.y - m_vBeginDragXY.y);
     const auto TICKDELTA = Vector2D(mousePos.x - m_vLastDragXY.x, mousePos.y - m_vLastDragXY.y);
 
-    const auto PANIMATE = &g_pConfigManager->getConfigValuePtr("misc:animate_manual_resizes")->intValue;
+    const auto PANIMATEMOUSE = &g_pConfigManager->getConfigValuePtr("misc:animate_mouse_windowdragging")->intValue;
+    const auto PANIMATE      = &g_pConfigManager->getConfigValuePtr("misc:animate_manual_resizes")->intValue;
 
     if (abs(TICKDELTA.x) < 1.f && abs(TICKDELTA.y) < 1.f)
         return;
@@ -276,7 +284,7 @@ void IHyprLayout::onMouseMove(const Vector2D& mousePos) {
 
     if (g_pInputManager->dragMode == MBIND_MOVE) {
 
-        if (*PANIMATE) {
+        if (*PANIMATEMOUSE) {
             DRAGGINGWINDOW->m_vRealPosition = m_vBeginDragPositionXY + DELTA;
         } else {
             DRAGGINGWINDOW->m_vRealPosition.setValueAndWarp(m_vBeginDragPositionXY + DELTA);

@@ -61,6 +61,8 @@ CKeybindManager::CKeybindManager() {
     m_mDispatchers["focusurgentorlast"]             = focusUrgentOrLast;
     m_mDispatchers["focuscurrentorlast"]            = focusCurrentOrLast;
     m_mDispatchers["lockgroups"]                    = lockGroups;
+    m_mDispatchers["moveintogroup"]                 = moveIntoGroup;
+    m_mDispatchers["moveoutofgroup"]                = moveOutOfGroup;
 
     m_tScrollTimer.reset();
 }
@@ -258,15 +260,19 @@ bool CKeybindManager::onAxisEvent(wlr_pointer_axis_event* e) {
 
     bool found = false;
     if (e->source == WLR_AXIS_SOURCE_WHEEL && e->orientation == WLR_AXIS_ORIENTATION_VERTICAL) {
-        if (e->delta < 0) {
+        if (e->delta < 0)
             found = handleKeybinds(MODS, "mouse_down", 0, 0, true, 0);
-        } else {
+        else
             found = handleKeybinds(MODS, "mouse_up", 0, 0, true, 0);
-        }
-
-        if (found)
-            shadowKeybinds();
+    } else if (e->source == WLR_AXIS_SOURCE_WHEEL && e->orientation == WLR_AXIS_ORIENTATION_HORIZONTAL) {
+        if (e->delta < 0)
+            found = handleKeybinds(MODS, "mouse_left", 0, 0, true, 0);
+        else
+            found = handleKeybinds(MODS, "mouse_right", 0, 0, true, 0);
     }
+
+    if (found)
+        shadowKeybinds();
 
     return !found;
 }
@@ -1127,9 +1133,13 @@ void CKeybindManager::moveFocusTo(std::string args) {
 
             if (PLASTWINDOW->m_iMonitorID != PWINDOWTOCHANGETO->m_iMonitorID) {
                 // event
-                const auto PNEWMON = g_pCompositor->getMonitorFromID(PWINDOWTOCHANGETO->m_iMonitorID);
+                const auto PNEWMON       = g_pCompositor->getMonitorFromID(PWINDOWTOCHANGETO->m_iMonitorID);
+                const auto PNEWWORKSPACE = g_pCompositor->getWorkspaceByID(PWINDOWTOCHANGETO->m_iWorkspaceID);
 
                 g_pCompositor->setActiveMonitor(PNEWMON);
+
+                g_pCompositor->deactivateAllWLRWorkspaces(PNEWWORKSPACE->m_pWlrHandle);
+                PNEWWORKSPACE->setActive(true);
             }
         }
     };
@@ -1317,7 +1327,14 @@ void CKeybindManager::changeGroupActive(std::string args) {
     if (PWINDOW->m_sGroupData.pNextWindow == PWINDOW)
         return;
 
-    PWINDOW->setGroupCurrent(PWINDOW->m_sGroupData.pNextWindow);
+    if (args != "b" && args != "prev") {
+        PWINDOW->setGroupCurrent(PWINDOW->m_sGroupData.pNextWindow);
+    } else {
+        CWindow* curr = PWINDOW->m_sGroupData.pNextWindow;
+        while (curr->m_sGroupData.pNextWindow != PWINDOW)
+            curr = curr->m_sGroupData.pNextWindow;
+        PWINDOW->setGroupCurrent(curr);
+    }
 }
 
 void CKeybindManager::toggleSplit(std::string args) {
@@ -1731,7 +1748,7 @@ void CKeybindManager::circleNext(std::string arg) {
     if (!g_pCompositor->m_pLastWindow) {
         // if we have a clear focus, find the first window and get the next focusable.
         if (g_pCompositor->getWindowsOnWorkspace(g_pCompositor->m_pLastMonitor->activeWorkspace) > 0) {
-            const auto PWINDOW = g_pCompositor->getNextWindowOnWorkspace(g_pCompositor->getFirstWindowOnWorkspace(g_pCompositor->m_pLastMonitor->activeWorkspace), true);
+            const auto PWINDOW = g_pCompositor->getFirstWindowOnWorkspace(g_pCompositor->m_pLastMonitor->activeWorkspace);
 
             switchToWindow(PWINDOW);
         }
@@ -1752,6 +1769,11 @@ void CKeybindManager::focusWindow(std::string regexp) {
         return;
 
     Debug::log(LOG, "Focusing to window name: %s", PWINDOW->m_szTitle.c_str());
+
+    if (PWINDOW->isHidden() && PWINDOW->m_sGroupData.pNextWindow) {
+        // grouped, change the current to us
+        PWINDOW->setGroupCurrent(PWINDOW);
+    }
 
     g_pCompositor->focusWindow(PWINDOW);
 
@@ -2040,4 +2062,44 @@ void CKeybindManager::lockGroups(std::string args) {
     } else {
         g_pKeybindManager->m_bGroupsLocked = false;
     }
+}
+
+void CKeybindManager::moveIntoGroup(std::string args) {
+    char arg = args[0];
+
+    if (!isDirection(args)) {
+        Debug::log(ERR, "Cannot move into group in direction %c, unsupported direction. Supported: l,r,u/t,d/b", arg);
+        return;
+    }
+
+    const auto PWINDOW = g_pCompositor->m_pLastWindow;
+
+    if (!PWINDOW || PWINDOW->m_bIsFloating)
+        return;
+
+    const auto PWINDOWINDIR = g_pCompositor->getWindowInDirection(PWINDOW, arg);
+
+    if (!PWINDOWINDIR || !PWINDOWINDIR->m_sGroupData.pNextWindow)
+        return;
+
+    g_pLayoutManager->getCurrentLayout()->onWindowRemoved(PWINDOW);
+
+    PWINDOWINDIR->insertWindowToGroup(PWINDOW);
+}
+
+void CKeybindManager::moveOutOfGroup(std::string args) {
+    const auto PWINDOW = g_pCompositor->m_pLastWindow;
+
+    if (!PWINDOW || !PWINDOW->m_sGroupData.pNextWindow)
+        return;
+
+    g_pLayoutManager->getCurrentLayout()->onWindowRemoved(PWINDOW);
+
+    const auto GROUPSLOCKEDPREV = g_pKeybindManager->m_bGroupsLocked;
+
+    g_pKeybindManager->m_bGroupsLocked = true;
+
+    g_pLayoutManager->getCurrentLayout()->onWindowCreated(PWINDOW);
+
+    g_pKeybindManager->m_bGroupsLocked = GROUPSLOCKEDPREV;
 }
