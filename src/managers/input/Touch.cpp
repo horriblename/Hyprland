@@ -13,6 +13,19 @@ void CInputManager::onTouchDown(wlr_touch_down_event* e) {
 
     wlr_cursor_warp(g_pCompositor->m_sWLRCursor, nullptr, PMONITOR->vecPosition.x + e->x * PMONITOR->vecSize.x, PMONITOR->vecPosition.y + e->y * PMONITOR->vecSize.y);
 
+    // TODO should I use ensureMouseBindState()
+    if (g_pKeybindManager->m_bIsMouseBindActive) {
+        // deny all touch events as long as mouse bind is active
+        return;
+    }
+
+    // TODO maybe move CLICKMODE_KILL before this block
+    const auto PASS = g_pKeybindManager->onTouchDownEvent(e);
+    if (!PASS) {
+        // TODO maybe don't return if binds:pass_mouse_when_bound is set
+        return;
+    }
+
     refocus();
 
     if (m_ecbClickBehavior == CLICKMODE_KILL) {
@@ -53,6 +66,10 @@ void CInputManager::onTouchDown(wlr_touch_down_event* e) {
 }
 
 void CInputManager::onTouchUp(wlr_touch_up_event* e) {
+    const auto PASS = g_pKeybindManager->onTouchUpEvent(e);
+    if (!PASS) {
+        return;
+    }
     if (m_sTouchData.touchFocusSurface) {
         wlr_seat_touch_notify_up(g_pCompositor->m_sSeat.seat, e->time_msec, e->touch_id);
     }

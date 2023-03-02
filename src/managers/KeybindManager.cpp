@@ -1,4 +1,5 @@
 #include "KeybindManager.hpp"
+#include "input/InputManager.hpp"
 
 #include <regex>
 
@@ -302,6 +303,36 @@ bool CKeybindManager::onMouseEvent(wlr_pointer_button_event* e) {
     return !found && !mouseBindWasActive;
 }
 
+bool CKeybindManager::onTouchDownEvent(wlr_touch_down_event* e) {
+    const auto MODS = g_pInputManager->accumulateModsFromAllKBs();
+
+    m_uLastTouchId = e->touch_id;
+    m_uLastCode    = 0;
+    m_uTimeLastMs  = e->time_msec;
+
+    bool mouseBindWasActive = ensureMouseBindState();
+    bool found              = handleKeybinds(MODS, "touch", 0, 0, true, 0);
+    if (found)
+        shadowKeybinds();
+
+    return !found && !mouseBindWasActive;
+}
+
+bool CKeybindManager::onTouchUpEvent(wlr_touch_up_event* e) {
+    const auto MODS = g_pInputManager->accumulateModsFromAllKBs();
+
+    // TODO CKeybindManager::pass(), also see CInputManager::onTouchDown()
+    m_uLastTouchId = e->touch_id; // TODO might not be needed
+    m_uLastCode    = 0;
+    m_uTimeLastMs  = e->time_msec;
+
+    bool mouseBindWasActive = ensureMouseBindState();
+    bool found              = handleKeybinds(MODS, "touch", 0, 0, false, 0);
+    shadowKeybinds();
+
+    return !found && !mouseBindWasActive;
+}
+
 void CKeybindManager::resizeWithBorder(wlr_pointer_button_event* e) {
     if (e->state == WLR_BUTTON_PRESSED) {
         mouse("1resizewindow");
@@ -352,7 +383,7 @@ bool CKeybindManager::handleKeybinds(const uint32_t& modmask, const std::string&
 
     for (auto& k : m_lKeybinds) {
         if (modmask != k.modmask || (g_pCompositor->m_sSeat.exclusiveClient && !k.locked) || k.submap != m_szCurrentSelectedSubmap ||
-            (!pressed && !k.release && k.handler != "pass" && k.handler != "mouse") || k.shadowed)
+            (!pressed && !k.release && k.handler != "pass" && k.handler != "mouse" && k.handler != "touch") || k.shadowed)
             continue;
 
         if (!key.empty()) {
