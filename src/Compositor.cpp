@@ -20,12 +20,17 @@ int handleCritSignal(int signo, void* data) {
 
 void handleUnrecoverableSignal(int sig) {
 
+    // remove our handlers
+    signal(SIGABRT, SIG_DFL);
+    signal(SIGSEGV, SIG_DFL);
+
     if (g_pHookSystem->m_bCurrentEventPlugin) {
         longjmp(g_pHookSystem->m_jbHookFaultJumpBuf, 1);
         return;
     }
 
     CrashReporter::createAndSaveCrash(sig);
+
     abort();
 }
 
@@ -1804,21 +1809,31 @@ CMonitor* CCompositor::getMonitorFromString(const std::string& name) {
             return nullptr;
         }
 
-        if (monID > -1 && monID < (int)g_pCompositor->m_vMonitors.size()) {
-            return g_pCompositor->getMonitorFromID(monID);
+        if (monID > -1 && monID < (int)m_vMonitors.size()) {
+            return getMonitorFromID(monID);
         } else {
             Debug::log(ERR, "Error in getMonitorFromString: invalid arg 1");
             return nullptr;
         }
+    } else if (name.find("desc:") == 0) {
+        const auto DESCRIPTION = name.substr(5);
+
+        for (auto& m : m_vMonitors) {
+            if (m->output->description && std::string(m->output->description).find(DESCRIPTION) == 0) {
+                return m.get();
+            }
+        }
+
+        return nullptr;
     } else {
         if (name == "current")
             return g_pCompositor->m_pLastMonitor;
 
         if (isDirection(name)) {
-            const auto PMONITOR = g_pCompositor->getMonitorInDirection(name[0]);
+            const auto PMONITOR = getMonitorInDirection(name[0]);
             return PMONITOR;
         } else {
-            for (auto& m : g_pCompositor->m_vMonitors) {
+            for (auto& m : m_vMonitors) {
                 if (m->szName == name) {
                     return m.get();
                 }
