@@ -3,6 +3,7 @@
 #include "../defines.hpp"
 #include "../helpers/Monitor.hpp"
 #include "../helpers/Color.hpp"
+#include "../helpers/Timer.hpp"
 #include <list>
 #include <unordered_map>
 
@@ -41,6 +42,7 @@ struct SMonitorRenderData {
     bool    m_bShadersInitialized = false;
     CShader m_shQUAD;
     CShader m_shRGBA;
+    CShader m_shPASSTHRURGBA;
     CShader m_shRGBX;
     CShader m_shEXT;
     CShader m_shBLUR1;
@@ -103,9 +105,6 @@ class CHyprOpenGLImpl {
     void                                       saveBufferForMirror();
     void                                       renderMirrored();
 
-    void                                       onWindowResizeStart(CWindow*);
-    void                                       onWindowResizeEnd(CWindow*);
-
     void                                       applyScreenShader(const std::string& path);
 
     SCurrentRenderData                         m_RenderData;
@@ -136,6 +135,7 @@ class CHyprOpenGLImpl {
     bool              m_bApplyFinalShader = false;
 
     CShader           m_sFinalScreenShader;
+    CTimer            m_tGlobalTimer;
 
     GLuint            createProgram(const std::string&, const std::string&, bool dynamic = false);
     GLuint            compileShader(const GLuint&, std::string, bool dynamic = false);

@@ -7,6 +7,8 @@
   fetchpatch,
   lib,
   hwdata,
+  libliftoff,
+  libdisplay-info,
   hidpiXWayland ? true,
   enableXWayland ? true,
   nvidiaPatches ? false,
@@ -33,10 +35,8 @@ assert (lib.assertMsg (hidpiXWayland -> enableXWayland) ''
       patches =
         (old.patches or [])
         ++ (lib.optionals (enableXWayland && hidpiXWayland) [
-          (fetchpatch {
-            url = "https://gitlab.freedesktop.org/lilydjwg/wlroots/-/commit/6c5ffcd1fee9e44780a6a8792f74ecfbe24a1ca7.diff";
-            sha256 = "sha256-Eo1pTa/PIiJsRZwIUnHGTIFFIedzODVf0ZeuXb0a3TQ=";
-          })
+          # adapted from https://gitlab.freedesktop.org/lilydjwg/wlroots/-/commit/6c5ffcd1fee9e44780a6a8792f74ecfbe24a1ca7
+          ./wlroots-hidpi.patch
           (fetchpatch {
             url = "https://gitlab.freedesktop.org/wlroots/wlroots/-/commit/18595000f3a21502fd60bf213122859cc348f9af.diff";
             sha256 = "sha256-jvfkAMh3gzkfuoRhB4E9T5X1Hu62wgUjj4tZkJm0mrI=";
@@ -58,7 +58,7 @@ assert (lib.assertMsg (hidpiXWayland -> enableXWayland) ''
           ''
           else ""
         );
-      buildInputs = old.buildInputs ++ [hwdata];
+      buildInputs = old.buildInputs ++ [hwdata libliftoff libdisplay-info];
     }))
   .override {
     xwayland = xwayland.overrideAttrs (old: {

@@ -311,7 +311,7 @@ void CConfigManager::configSetValueSafe(const std::string& COMMAND, const std::s
         for (auto& [handle, pMap] : pluginConfigs) {
             auto it = std::find_if(pMap->begin(), pMap->end(), [&](const auto& other) { return other.first == COMMAND; });
             if (it == pMap->end()) {
-                return; // plugin vars do not err, so we silently ignore.
+                continue; // May be in another plugin
             }
 
             CONFIGENTRY = &it->second;
@@ -1039,6 +1039,29 @@ void CConfigManager::handleBindWS(const std::string& command, const std::string&
     boundWorkspaces.push_back({ARGS[0], ARGS[1]});
 }
 
+void CConfigManager::handleEnv(const std::string& command, const std::string& value) {
+    if (!isFirstLaunch)
+        return;
+
+    const auto ARGS = CVarList(value, 2);
+
+    if (ARGS[0].empty()) {
+        parseError = "env empty";
+        return;
+    }
+
+    setenv(ARGS[0].c_str(), ARGS[1].c_str(), 1);
+
+    if (command.back() == 'd') {
+        // dbus
+        const auto CMD = "systemctl --user import-environment " + ARGS[0] +
+            " && hash dbus-update-activation-environment 2>/dev/null && "
+            "dbus-update-activation-environment --systemd " +
+            ARGS[0];
+        handleRawExec("", CMD.c_str());
+    }
+}
+
 std::string CConfigManager::parseKeyword(const std::string& COMMAND, const std::string& VALUE, bool dynamic) {
     if (dynamic) {
         parseError      = "";
@@ -1083,6 +1106,8 @@ std::string CConfigManager::parseKeyword(const std::string& COMMAND, const std::
         handleBlurLS(COMMAND, VALUE);
     else if (COMMAND == "wsbind")
         handleBindWS(COMMAND, VALUE);
+    else if (COMMAND.find("env") == 0)
+        handleEnv(COMMAND, VALUE);
     else {
         configSetValueSafe(currentCategory + (currentCategory == "" ? "" : ":") + COMMAND, VALUE);
         needsLayoutRecalc = 2;
@@ -1607,6 +1632,12 @@ std::vector<SLayerRule> CConfigManager::getMatchingRules(SLayerSurface* pLS) {
 void CConfigManager::dispatchExecOnce() {
     if (firstExecDispatched || isFirstLaunch)
         return;
+
+    // update dbus env
+    handleRawExec(
+        "",
+        "systemctl --user import-environment DISPLAY WAYLAND_DISPLAY HYPRLAND_INSTANCE_SIGNATURE XDG_CURRENT_DESKTOP && hash dbus-update-activation-environment 2>/dev/null && "
+        "dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP HYPRLAND_INSTANCE_SIGNATURE");
 
     firstExecDispatched = true;
 

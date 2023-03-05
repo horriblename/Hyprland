@@ -46,11 +46,33 @@
       wlroots-hyprland = prev.callPackage ./nix/wlroots.nix {
         version = mkDate (inputs.wlroots.lastModifiedDate or "19700101") + "_" + (inputs.wlroots.shortRev or "dirty");
         src = inputs.wlroots;
+        libdisplay-info = prev.libdisplay-info.overrideAttrs (old: {
+          version = "0.1.1+date=2023-03-02";
+          src = prev.fetchFromGitLab {
+            domain = "gitlab.freedesktop.org";
+            owner = "emersion";
+            repo = old.pname;
+            rev = "147d6611a64a6ab04611b923e30efacaca6fc678";
+            sha256 = "sha256-/q79o13Zvu7x02SBGu0W5yQznQ+p7ltZ9L6cMW5t/o4=";
+          };
+        });
+
+        libliftoff = prev.libliftoff.overrideAttrs (old: {
+          version = "0.5.0-dev";
+          src = prev.fetchFromGitLab {
+            domain = "gitlab.freedesktop.org";
+            owner = "emersion";
+            repo = old.pname;
+            rev = "d98ae243280074b0ba44bff92215ae8d785658c0";
+            sha256 = "sha256-DjwlS8rXE7srs7A8+tHqXyUsFGtucYSeq6X0T/pVOc8=";
+          };
+        });
       };
       hyprland = prev.callPackage ./nix/default.nix {
         stdenv = prev.gcc12Stdenv;
         version = props.version + "+date=" + (mkDate (self.lastModifiedDate or "19700101")) + "_" + (self.shortRev or "dirty");
         wlroots = wlroots-hyprland;
+        commit = self.rev or "";
         inherit (inputs.hyprland-protocols.packages.${prev.stdenv.hostPlatform.system}) hyprland-protocols;
         inherit udis86;
       };
@@ -72,6 +94,10 @@
         hyprland-share-picker = inputs.xdph.packages.${prev.stdenv.hostPlatform.system}.hyprland-share-picker.override {inherit hyprland;};
       };
     };
+
+    checks = genSystems (system:
+      (lib.filterAttrs (n: _: (lib.hasPrefix "hyprland" n) && !(lib.hasSuffix "debug" n)) self.packages.${system})
+      // {inherit (self.packages.${system}) xdg-desktop-portal-hyprland;});
 
     packages = genSystems (system:
       (self.overlays.default null pkgsFor.${system})

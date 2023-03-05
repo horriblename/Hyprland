@@ -6,6 +6,7 @@
 #include "../helpers/AnimatedVariable.hpp"
 #include "../helpers/BezierCurve.hpp"
 #include "../Window.hpp"
+#include "../helpers/Timer.hpp"
 
 class CAnimationManager {
   public:
@@ -25,6 +26,10 @@ class CAnimationManager {
     std::unordered_map<std::string, CBezierCurve> getAllBeziers();
 
     std::list<CAnimatedVariable*>                 m_lAnimatedVariables;
+
+    wl_event_source*                              m_pAnimationTick;
+
+    float                                         m_fLastTickTime; // in ms
 
   private:
     bool                                          deltaSmallToFlip(const Vector2D& a, const Vector2D& b);

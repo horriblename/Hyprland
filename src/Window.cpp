@@ -161,6 +161,10 @@ void CWindow::updateWindowDecos() {
 pid_t CWindow::getPID() {
     pid_t PID = -1;
     if (!m_bIsX11) {
+
+        if (!m_bIsMapped)
+            return -1;
+
         wl_client_get_credentials(wl_resource_get_client(m_uSurface.xdg->resource), &PID, nullptr, nullptr);
     } else {
         PID = m_uSurface.xwayland->pid;
@@ -350,9 +354,6 @@ void CWindow::onMap() {
     m_fAlpha.registerVar();
     m_cRealShadowColor.registerVar();
     m_fDimPercent.registerVar();
-
-    m_vRealSize.setCallbackOnEnd([&](void* ptr) { g_pHyprOpenGL->onWindowResizeEnd(this); }, false);
-    m_vRealSize.setCallbackOnBegin([&](void* ptr) { g_pHyprOpenGL->onWindowResizeStart(this); }, false);
 
     m_fBorderAngleAnimationProgress.setCallbackOnEnd([&](void* ptr) { onBorderAngleAnimEnd(ptr); }, false);
 
