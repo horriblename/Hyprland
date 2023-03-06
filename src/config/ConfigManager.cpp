@@ -10,6 +10,8 @@
 #include <fstream>
 #include <iostream>
 
+extern "C" char** environ;
+
 CConfigManager::CConfigManager() {
     configValues["general:col.active_border"].data       = std::make_shared<CGradientValueData>(0xffffffff);
     configValues["general:col.inactive_border"].data     = std::make_shared<CGradientValueData>(0xff444444);
@@ -31,6 +33,18 @@ CConfigManager::CConfigManager() {
 
     Debug::disableLogs = &configValues["debug:disable_logs"].intValue;
     Debug::disableTime = &configValues["debug:disable_time"].intValue;
+
+    populateEnvironment();
+}
+
+void CConfigManager::populateEnvironment() {
+    environmentVariables.clear();
+    for (char** env = environ; *env; ++env) {
+        const std::string ENVVAR       = *env;
+        const auto        VARIABLE     = ENVVAR.substr(0, ENVVAR.find_first_of('='));
+        const auto        VALUE        = ENVVAR.substr(ENVVAR.find_first_of('=') + 1);
+        environmentVariables[VARIABLE] = VALUE;
+    }
 }
 
 void CConfigManager::setDefaultVars() {
@@ -112,6 +126,7 @@ void CConfigManager::setDefaultVars() {
     configValues["dwindle:use_active_for_splits"].intValue    = 1;
 
     configValues["master:special_scale_factor"].floatValue = 0.8f;
+    configValues["master:mfact"].floatValue                = 0.55f;
     configValues["master:new_is_master"].intValue          = 1;
     configValues["master:always_center_master"].intValue   = 0;
     configValues["master:new_on_top"].intValue             = 0;
@@ -1140,10 +1155,22 @@ void CConfigManager::applyUserDefinedVars(std::string& line, const size_t equals
     while (dollarPlace != std::string::npos) {
 
         const auto STRAFTERDOLLAR = line.substr(dollarPlace + 1);
+        bool       found          = false;
         for (auto& [var, value] : configDynamicVars) {
             if (STRAFTERDOLLAR.find(var) == 0) {
                 line.replace(dollarPlace, var.length() + 1, value);
+                found = true;
                 break;
+            }
+        }
+
+        if (!found) {
+            // maybe env?
+            for (auto& [var, value] : environmentVariables) {
+                if (STRAFTERDOLLAR.find(var) == 0) {
+                    line.replace(dollarPlace, var.length() + 1, value);
+                    break;
+                }
             }
         }
 
