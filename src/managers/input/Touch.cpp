@@ -2,9 +2,10 @@
 #include "../../Compositor.hpp"
 
 void CInputManager::onTouchDown(wlr_touch_down_event* e) {
-    auto       PMONITOR = g_pCompositor->getMonitorFromName(e->touch->output_name ? e->touch->output_name : "");
+    static auto* const PRESIZEONBORDER = &g_pConfigManager->getConfigValuePtr("general:resize_on_border")->intValue;
+    auto               PMONITOR        = g_pCompositor->getMonitorFromName(e->touch->output_name ? e->touch->output_name : "");
 
-    const auto PDEVIT = std::find_if(m_lTouchDevices.begin(), m_lTouchDevices.end(), [&](const STouchDevice& other) { return other.pWlrDevice == &e->touch->base; });
+    const auto         PDEVIT = std::find_if(m_lTouchDevices.begin(), m_lTouchDevices.end(), [&](const STouchDevice& other) { return other.pWlrDevice == &e->touch->base; });
 
     if (PDEVIT != m_lTouchDevices.end() && !PDEVIT->boundOutput.empty())
         PMONITOR = g_pCompositor->getMonitorFromName(PDEVIT->boundOutput);
@@ -25,6 +26,19 @@ void CInputManager::onTouchDown(wlr_touch_down_event* e) {
     if (!PASS) {
         // TODO maybe don't return if binds:pass_mouse_when_bound is set
         return;
+    }
+
+    if (*PRESIZEONBORDER && !m_bLastFocusOnLS) {
+        // TODO prolly new function and replace the same thing in processMouseDownNormal as well
+        const auto mouseCoords = g_pInputManager->getMouseCoordsInternal();
+        const auto w           = g_pCompositor->vectorToWindowIdeal(mouseCoords);
+        if (w && !w->m_bIsFullscreen) {
+            const wlr_box real = {w->m_vRealPosition.vec().x, w->m_vRealPosition.vec().y, w->m_vRealSize.vec().x, w->m_vRealSize.vec().y};
+            if ((!wlr_box_contains_point(&real, mouseCoords.x, mouseCoords.y) || w->isInCurvedCorner(mouseCoords.x, mouseCoords.y)) && !w->hasPopupAt(mouseCoords)) {
+                g_pKeybindManager->mouse("1resizewindow");
+                return;
+            }
+        }
     }
 
     refocus();
