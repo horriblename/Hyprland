@@ -74,13 +74,14 @@
         wlroots = wlroots-hyprland;
         commit = self.rev or "";
         inherit (inputs.hyprland-protocols.packages.${prev.stdenv.hostPlatform.system}) hyprland-protocols;
-        inherit udis86;
+        inherit udis86 wf-touch;
       };
       hyprland-debug = hyprland.override {debug = true;};
       hyprland-no-hidpi = hyprland.override {hidpiXWayland = false;};
       hyprland-nvidia = hyprland.override {nvidiaPatches = true;};
 
       udis86 = prev.callPackage ./nix/udis86.nix {};
+      wf-touch = prev.callPackage ./nix/wf-touch.nix {};
 
       waybar-hyprland = prev.waybar.overrideAttrs (oldAttrs: {
         postPatch = ''

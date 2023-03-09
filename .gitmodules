@@ -7,3 +7,6 @@
 [submodule "subprojects/udis86"]
 	path = subprojects/udis86
 	url = https://github.com/canihavesomecoffee/udis86
+[submodule "subprojects/wf-touch"]
+	path = subprojects/wf-touch
+	url = https://github.com/WayfireWM/wf-touch
