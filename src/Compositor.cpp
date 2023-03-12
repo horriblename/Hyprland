@@ -341,7 +341,11 @@ void CCompositor::cleanup() {
         g_pXWaylandManager->m_sWLRXWayland = nullptr;
     }
 
+    wl_display_destroy_clients(g_pCompositor->m_sWLDisplay);
+
     wl_display_terminate(m_sWLDisplay);
+
+    m_sWLDisplay = nullptr;
 
     g_pKeybindManager->spawn("sleep 5 && kill -9 " + std::to_string(m_iHyprlandPID)); // this is to prevent that random "freezing"
                                                                                       // the PID should not be reused.
@@ -939,7 +943,7 @@ void CCompositor::focusSurface(wlr_surface* pSurface, CWindow* pWindowOwner) {
         wlr_seat_keyboard_clear_focus(m_sSeat.seat);
         g_pEventManager->postEvent(SHyprIPCEvent{"activewindow", ","}); // unfocused
         g_pEventManager->postEvent(SHyprIPCEvent{"activewindowv2", ","});
-        EMIT_HOOK_EVENT("keyboardFocus", nullptr);
+        EMIT_HOOK_EVENT("keyboardFocus", (wlr_surface*)nullptr);
         m_pLastFocus = nullptr;
         return;
     }

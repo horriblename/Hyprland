@@ -124,6 +124,7 @@ void CConfigManager::setDefaultVars() {
     configValues["dwindle:split_width_multiplier"].floatValue = 1.0f;
     configValues["dwindle:no_gaps_when_only"].intValue        = 0;
     configValues["dwindle:use_active_for_splits"].intValue    = 1;
+    configValues["dwindle:default_split_ratio"].floatValue    = 1.f;
 
     configValues["master:special_scale_factor"].floatValue = 0.8f;
     configValues["master:mfact"].floatValue                = 0.55f;
@@ -941,7 +942,7 @@ void CConfigManager::updateBlurredLS(const std::string& name, const bool forceBl
     std::string matchName = name;
 
     if (BYADDRESS) {
-        matchName = matchName.substr(9);
+        matchName = matchName.substr(8);
     }
 
     for (auto& m : g_pCompositor->m_vMonitors) {
