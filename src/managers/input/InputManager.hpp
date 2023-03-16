@@ -6,6 +6,7 @@
 #include "../../Window.hpp"
 #include "../../helpers/Timer.hpp"
 #include "InputMethodRelay.hpp"
+#include <wayfire/touch/touch.hpp>
 
 enum eClickBehaviorMode {
     CLICKMODE_DEFAULT = 0,
@@ -196,6 +197,8 @@ class CInputManager {
 
     void               applyConfigToKeyboard(SKeyboard*);
 
+    void               updateGestures(const wf::touch::gesture_event_t&);
+
     // this will be set after a refocus()
     wlr_surface*   m_pFoundSurfaceToFocus = nullptr;
     SLayerSurface* m_pFoundLSToFocus      = nullptr;
@@ -203,6 +206,10 @@ class CInputManager {
 
     // for releasing mouse buttons
     std::list<uint32_t> m_lCurrentlyHeldButtons;
+
+    // touch gestures
+    wf::touch::gesture_state_t        m_sFingerState;
+    std::vector<wf::touch::gesture_t> m_cGestures;
 
     // swipe
     void beginWorkspaceSwipe();

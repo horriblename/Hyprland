@@ -24,6 +24,11 @@ void CInputManager::onTouchDown(wlr_touch_down_event* e) {
 
     m_bLastInputTouch = true;
 
+    wf::touch::gesture_event_t gesture_event = {.type = wf::touch::EVENT_TYPE_TOUCH_DOWN, .time = e->time_msec, .finger = e->touch_id, .pos = {e->x, e->y}};
+
+    m_sFingerState.update(gesture_event);
+    updateGestures(gesture_event);
+
     m_sTouchData.touchFocusWindow  = m_pFoundWindowToFocus;
     m_sTouchData.touchFocusSurface = m_pFoundSurfaceToFocus;
     m_sTouchData.touchFocusLS      = m_pFoundLSToFocus;
@@ -53,12 +58,33 @@ void CInputManager::onTouchDown(wlr_touch_down_event* e) {
 }
 
 void CInputManager::onTouchUp(wlr_touch_up_event* e) {
+    const auto finger = m_sFingerState.fingers.find(e->touch_id);
+    if (finger == m_sFingerState.fingers.end()) {
+        // idk what horrible thing has to happen for this to occur, but checking regardless
+        Debug::log(WARN, "could not find finger of id %d in m_sFingerState", e->touch_id);
+        return;
+    }
+
+    const wf::touch::gesture_event_t gesture_event = {
+        .type   = wf::touch::EVENT_TYPE_TOUCH_UP,
+        .time   = e->time_msec,
+        .finger = e->touch_id,
+        .pos    = finger->second.current,
+    };
+
+    updateGestures(gesture_event);
+    m_sFingerState.update(gesture_event);
+
     if (m_sTouchData.touchFocusSurface) {
         wlr_seat_touch_notify_up(g_pCompositor->m_sSeat.seat, e->time_msec, e->touch_id);
     }
 }
 
 void CInputManager::onTouchMove(wlr_touch_motion_event* e) {
+    const wf::touch::gesture_event_t gesture_event = {.type = wf::touch::EVENT_TYPE_MOTION, .time = e->time_msec, .finger = e->touch_id, .pos = {e->x, e->y}};
+    updateGestures(gesture_event);
+    m_sFingerState.update(gesture_event);
+
     if (m_sTouchData.touchFocusWindow && g_pCompositor->windowValidMapped(m_sTouchData.touchFocusWindow)) {
         const auto PMONITOR = g_pCompositor->getMonitorFromID(m_sTouchData.touchFocusWindow->m_iMonitorID);
 
@@ -68,7 +94,7 @@ void CInputManager::onTouchMove(wlr_touch_motion_event* e) {
         const auto local = g_pInputManager->getMouseCoordsInternal() - m_sTouchData.touchSurfaceOrigin;
 
         wlr_seat_touch_notify_motion(g_pCompositor->m_sSeat.seat, e->time_msec, e->touch_id, local.x, local.y);
-        wlr_seat_pointer_notify_motion(g_pCompositor->m_sSeat.seat, e->time_msec, local.x, local.y);
+        // wlr_seat_pointer_notify_motion(g_pCompositor->m_sSeat.seat, e->time_msec, local.x, local.y);
     } else if (m_sTouchData.touchFocusLS) {
         const auto PMONITOR = g_pCompositor->getMonitorFromID(m_sTouchData.touchFocusLS->monitorID);
 
@@ -78,7 +104,7 @@ void CInputManager::onTouchMove(wlr_touch_motion_event* e) {
         const auto local = g_pInputManager->getMouseCoordsInternal() - m_sTouchData.touchSurfaceOrigin;
 
         wlr_seat_touch_notify_motion(g_pCompositor->m_sSeat.seat, e->time_msec, e->touch_id, local.x, local.y);
-        wlr_seat_pointer_notify_motion(g_pCompositor->m_sSeat.seat, e->time_msec, local.x, local.y);
+        // wlr_seat_pointer_notify_motion(g_pCompositor->m_sSeat.seat, e->time_msec, local.x, local.y);
     }
 }
 
@@ -89,3 +115,14 @@ void CInputManager::onPointerHoldBegin(wlr_pointer_hold_begin_event* e) {
 void CInputManager::onPointerHoldEnd(wlr_pointer_hold_end_event* e) {
     wlr_pointer_gestures_v1_send_hold_end(g_pCompositor->m_sWLRPointerGestures, g_pCompositor->m_sSeat.seat, e->time_msec, e->cancelled);
 }
+
+void CInputManager::updateGestures(const wf::touch::gesture_event_t& e) {
+    // FIXME I have no clue what this does
+    for (auto& gesture : m_cGestures) {
+        if ((m_sFingerState.fingers.size() == 1) && (e.type == wf::touch::EVENT_TYPE_TOUCH_DOWN)) {
+            gesture.reset(e.time);
+        }
+
+        gesture.update_state(e);
+    }
+};
