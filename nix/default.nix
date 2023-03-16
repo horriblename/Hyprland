@@ -22,6 +22,7 @@
   wayland,
   wayland-protocols,
   wayland-scanner,
+  wf-touch,
   wlroots,
   xcbutilwm,
   xwayland,
@@ -78,6 +79,7 @@ in
           wayland
           wayland-protocols
           wayland-scanner
+          wf-touch
           pciutils
           (wlroots.override {inherit enableXWayland hidpiXWayland nvidiaPatches;})
         ]
