@@ -20,6 +20,9 @@ void Events::listener_change(wl_listener* listener, void* data) {
     const auto CONFIG = wlr_output_configuration_v1_create();
 
     for (auto& m : g_pCompositor->m_vMonitors) {
+        if (!m->output)
+            continue;
+
         const auto CONFIGHEAD = wlr_output_configuration_head_v1_create(CONFIG, m->output);
 
         // TODO: clients off of disabled
@@ -106,6 +109,10 @@ void Events::listener_monitorFrame(void* owner, void* data) {
 
     if ((g_pCompositor->m_sWLRSession && !g_pCompositor->m_sWLRSession->active) || !g_pCompositor->m_bSessionActive || g_pCompositor->m_bUnsafeState) {
         Debug::log(WARN, "Attempted to render frame on inactive session!");
+
+        if (g_pCompositor->m_bUnsafeState)
+            g_pConfigManager->performMonitorReload();
+
         return; // cannot draw on session inactive (different tty)
     }
 
@@ -351,9 +358,12 @@ void Events::listener_monitorDestroy(void* owner, void* data) {
 
     pMonitor->onDisconnect();
 
+    pMonitor->output                 = nullptr;
+    pMonitor->m_bRenderingInitPassed = false;
+
     // cleanup if not unsafe
     if (!g_pCompositor->m_bUnsafeState) {
-        Debug::log(LOG, "Removing monitor %s from realMonitors", pMonitor->output->name);
+        Debug::log(LOG, "Removing monitor %s from realMonitors", pMonitor->szName.c_str());
 
         std::erase_if(g_pCompositor->m_vRealMonitors, [&](std::shared_ptr<CMonitor>& el) { return el.get() == pMonitor; });
     }
