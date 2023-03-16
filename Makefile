@@ -168,6 +168,7 @@ all:
 	make fixwlr
 	cd ./subprojects/wlroots && meson setup build/ --buildtype=release && ninja -C build/ && cp ./build/libwlroots.so.12032 ${PREFIX}/lib/ || echo "Could not install libwlroots to ${PREFIX}/lib/libwlroots.so.12032"
 	cd subprojects/udis86 && cmake --no-warn-unused-cli -DCMAKE_BUILD_TYPE:STRING=Release -S . -B./build -G Ninja && cmake --build ./build --config Release --target all -j$(shell nproc)
+	cd subprojects/wf-touch && meson setup ./build && ninja -C ./build
 	make protocols
 	make release
 	make -C hyprctl all
@@ -177,6 +178,7 @@ install:
 	make fixwlr
 	cd ./subprojects/wlroots && meson setup build/ --buildtype=release && ninja -C build/ && cp ./build/libwlroots.so.12032 ${PREFIX}/lib/ || echo "Could not install libwlroots to ${PREFIX}/lib/libwlroots.so.12032"
 	cd subprojects/udis86 && cmake --no-warn-unused-cli -DCMAKE_BUILD_TYPE:STRING=Release -S . -B./build -G Ninja && cmake --build ./build --config Release --target all -j$(shell nproc) && cd ../..
+	cd subprojects/wf-touch && meson setup ./build && ninja -C ./build
 	make protocols
 	make release
 	make -C hyprctl all
@@ -224,11 +226,13 @@ config:
 	ninja -C subprojects/wlroots/build/ install
 
 	cd subprojects/udis86 && cmake --no-warn-unused-cli -DCMAKE_BUILD_TYPE:STRING=Release -S . -B ./build -G Ninja && cmake --build ./build --config Release --target all -j$(shell nproc)
+	cd subprojects/wf-touch && meson setup ./build && ninja -C ./build
 
 pluginenv:
 	make protocols
 
 	cd subprojects/udis86 && cmake --no-warn-unused-cli -DCMAKE_BUILD_TYPE:STRING=Release -S . -B ./build -G Ninja && cmake --build ./build --config Release --target all -j$(shell nproc)
+	cd subprojects/wf-touch && meson setup ./build && ninja -C ./build
 
 	make fixwlr
 

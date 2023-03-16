@@ -54,7 +54,8 @@ include_directories(
   .
   "subprojects/wlroots/include/"
   "subprojects/wlroots/build/include/"
-  "subprojects/udis86/")
+  "subprojects/udis86/"
+  "subprojects/wf-touch")
 set(CMAKE_CXX_STANDARD 23)
 add_compile_definitions(WLR_USE_UNSTABLE)
 add_compile_options(-Wall -Wextra -Wno-unused-parameter -Wno-unused-value -Wno-missing-field-initializers -Wno-narrowing -Wno-pointer-arith)
@@ -145,4 +146,5 @@ target_link_libraries(Hyprland
         ${CMAKE_SOURCE_DIR}/fractional-scale-v1-protocol.o
         ${CMAKE_SOURCE_DIR}/text-input-unstable-v1-protocol.o
         ${CMAKE_SOURCE_DIR}/subprojects/udis86/build/libudis86/liblibudis86.a
+        ${CMAKE_SOURCE_DIR}/subprojects/wf-touch/_build/libwftouch.a
 )
