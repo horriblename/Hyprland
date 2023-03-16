@@ -38,7 +38,7 @@ index 298bb3ec..6a924a79 100644
  endif
  
 diff --git a/src/meson.build b/src/meson.build
-index cae0d879..c1dafa38 100644
+index cae0d879..10f121cb 100644
 --- a/src/meson.build
 +++ b/src/meson.build
 @@ -7,17 +7,17 @@ executable('Hyprland', src,
@@ -59,7 +59,7 @@ index cae0d879..c1dafa38 100644
      systemd_dep,
 -    udis86,
 +    dependency('udis86'),
-+    dependency('wftouch')
++    dependency('wftouch', static: true),
  
      dependency('pixman-1'),
      dependency('gl', 'opengl'),
