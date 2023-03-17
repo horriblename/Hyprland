@@ -8,6 +8,7 @@
   ninja,
   cairo,
   git,
+  glm,
   hyprland-protocols,
   jq,
   libdrm,
@@ -66,6 +67,7 @@ in
         "man"
       ];
 
+      propagatedBuildInputs = [glm];
       buildInputs =
         [
           git
