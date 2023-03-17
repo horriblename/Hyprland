@@ -1,0 +1,14 @@
+diff --git a/meson.build b/meson.build
+index 33dbb59..67bb4ff 100644
+--- a/meson.build
++++ b/meson.build
+@@ -18,6 +18,9 @@ wftouch = declare_dependency(link_with: wftouch_lib,
+ 
+ doctest = dependency('doctest', required: get_option('tests'))
+ 
++pkg = import('pkgconfig')
++pkg.generate(wftouch_lib)
++
+ if doctest.found()
+     subdir('test')
+ endif

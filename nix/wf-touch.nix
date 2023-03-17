@@ -23,6 +23,12 @@ stdenv.mkDerivation {
   buildInputs = [glm doctest];
 
   mesonBuildType = "release";
+  # TODO add meson flag tests=false or something
+
+  patches = [
+    # generates pkg-config
+    ./wf-touch.patch
+  ];
 
   outputs = ["out"];
   meta = with lib; {
