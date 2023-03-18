@@ -81,6 +81,19 @@
         inherit udis86;
       };
       hyprland-debug = hyprland.override {debug = true;};
+
+      # To use incremental builds, the cache folder must first be set up on your machine:
+      # 1. create the directory /nix/var/cache/ccache with the same owner and permissions as /nix/store
+      # 2. add "extra-sandbox-paths = /nix/var/cache/ccache" to your nix.conf
+      #
+      # see https://nixos.wiki/wiki/CCache
+      hyprland-debug-incremental =
+        (hyprland-debug.override {
+          stdenv = prev.ccacheStdenv;
+        })
+        .overrideAttrs (prevAttrs: {
+          CCACHE_DIR = "/nix/var/cache/ccache/";
+        });
       hyprland-no-hidpi = hyprland.override {hidpiXWayland = false;};
       hyprland-nvidia = hyprland.override {nvidiaPatches = true;};
 
