@@ -117,9 +117,8 @@ void CInputManager::onPointerHoldEnd(wlr_pointer_hold_end_event* e) {
 }
 
 void CInputManager::updateGestures(const wf::touch::gesture_event_t& e) {
-    Debug::log(LOG, "updateGestures called");
-    // FIXME obv not good
-    // none of the onSwipeXxx functions use wlr_pointer_swip_xxx_event.pointer so it prolly won't crash
+    // FIXME obviously not good
+    const auto swipeScaleFactor = 1000;
     switch (e.type) {
         case wf::touch::EVENT_TYPE_TOUCH_DOWN: {
             wlr_pointer_swipe_begin_event emulated_swipe = wlr_pointer_swipe_begin_event{.pointer = nullptr, .time_msec = e.time, .fingers = m_sFingerState.fingers.size()};
@@ -133,8 +132,8 @@ void CInputManager::updateGestures(const wf::touch::gesture_event_t& e) {
             wlr_pointer_swipe_update_event emulated_swipe = wlr_pointer_swipe_update_event{.pointer   = nullptr,
                                                                                            .time_msec = e.time,
                                                                                            .fingers   = m_sFingerState.fingers.size(),
-                                                                                           .dx        = currentCenter.x - m_vTouchGestureLastCenter.x,
-                                                                                           .dy        = currentCenter.y - m_vTouchGestureLastCenter.y};
+                                                                                           .dx        = (currentCenter.x - m_vTouchGestureLastCenter.x) * swipeScaleFactor,
+                                                                                           .dy        = (currentCenter.y - m_vTouchGestureLastCenter.y) * swipeScaleFactor};
             onSwipeUpdate(&emulated_swipe);
             m_vTouchGestureLastCenter = currentCenter;
             break;
