@@ -67,7 +67,6 @@ in
         "man"
       ];
 
-      propagatedBuildInputs = [glm];
       buildInputs =
         [
           git

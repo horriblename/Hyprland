@@ -20,7 +20,8 @@ stdenv.mkDerivation {
   };
 
   nativeBuildInputs = [meson pkg-config cmake ninja];
-  buildInputs = [glm doctest];
+  buildInputs = [doctest];
+  propagatedBuildInputs = [glm];
 
   mesonBuildType = "release";
   # TODO add meson flag tests=false or something
