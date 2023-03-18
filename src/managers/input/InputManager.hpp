@@ -209,6 +209,7 @@ class CInputManager {
 
     // touch gestures
     wf::touch::gesture_state_t        m_sFingerState;
+    Vector2D                          m_vTouchGestureLastCenter;
     std::vector<wf::touch::gesture_t> m_cGestures;
 
     // swipe

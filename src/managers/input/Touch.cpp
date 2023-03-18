@@ -123,18 +123,24 @@ void CInputManager::updateGestures(const wf::touch::gesture_event_t& e) {
     switch (e.type) {
         case wf::touch::EVENT_TYPE_TOUCH_DOWN: {
             wlr_pointer_swipe_begin_event emulated_swipe = wlr_pointer_swipe_begin_event{.pointer = nullptr, .time_msec = e.time, .fingers = m_sFingerState.fingers.size()};
+            m_vTouchGestureLastCenter                    = Vector2D(m_sFingerState.get_center().origin.x, m_sFingerState.get_center().origin.y);
             onSwipeBegin(&emulated_swipe);
             break;
         }
         case wf::touch::EVENT_TYPE_MOTION: {
-            double                         dx = m_sFingerState.get_center().delta().x;
-            double                         dy = m_sFingerState.get_center().delta().y;
-            wlr_pointer_swipe_update_event emulated_swipe =
-                wlr_pointer_swipe_update_event{.pointer = nullptr, .time_msec = e.time, .fingers = m_sFingerState.fingers.size(), .dx = dx, .dy = dy};
+            auto                           currentCenter = Vector2D(m_sFingerState.get_center().current.x, m_sFingerState.get_center().current.y);
+
+            wlr_pointer_swipe_update_event emulated_swipe = wlr_pointer_swipe_update_event{.pointer   = nullptr,
+                                                                                           .time_msec = e.time,
+                                                                                           .fingers   = m_sFingerState.fingers.size(),
+                                                                                           .dx        = currentCenter.x - m_vTouchGestureLastCenter.x,
+                                                                                           .dy        = currentCenter.y - m_vTouchGestureLastCenter.y};
             onSwipeUpdate(&emulated_swipe);
+            m_vTouchGestureLastCenter = currentCenter;
             break;
         }
         case wf::touch::EVENT_TYPE_TOUCH_UP: {
+            // TODO maybe reset m_vTouchGestureLastCenter and handle error if motion event received with invalid last center
             wlr_pointer_swipe_end_event emulated_swipe = wlr_pointer_swipe_end_event{.pointer = nullptr, .time_msec = e.time, .cancelled = false};
             onSwipeEnd(&emulated_swipe);
             break;
