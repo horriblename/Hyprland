@@ -117,6 +117,30 @@ void CInputManager::onPointerHoldEnd(wlr_pointer_hold_end_event* e) {
 }
 
 void CInputManager::updateGestures(const wf::touch::gesture_event_t& e) {
+    Debug::log(LOG, "updateGestures called");
+    // FIXME obv not good
+    // none of the onSwipeXxx functions use wlr_pointer_swip_xxx_event.pointer so it prolly won't crash
+    switch (e.type) {
+        case wf::touch::EVENT_TYPE_TOUCH_DOWN: {
+            wlr_pointer_swipe_begin_event emulated_swipe = wlr_pointer_swipe_begin_event{.pointer = nullptr, .time_msec = e.time, .fingers = m_sFingerState.fingers.size()};
+            onSwipeBegin(&emulated_swipe);
+            break;
+        }
+        case wf::touch::EVENT_TYPE_MOTION: {
+            double                         dx = m_sFingerState.get_center().delta().x;
+            double                         dy = m_sFingerState.get_center().delta().y;
+            wlr_pointer_swipe_update_event emulated_swipe =
+                wlr_pointer_swipe_update_event{.pointer = nullptr, .time_msec = e.time, .fingers = m_sFingerState.fingers.size(), .dx = dx, .dy = dy};
+            onSwipeUpdate(&emulated_swipe);
+            break;
+        }
+        case wf::touch::EVENT_TYPE_TOUCH_UP: {
+            wlr_pointer_swipe_end_event emulated_swipe = wlr_pointer_swipe_end_event{.pointer = nullptr, .time_msec = e.time, .cancelled = false};
+            onSwipeEnd(&emulated_swipe);
+            break;
+        };
+    }
+
     // FIXME I have no clue what this does
     for (auto& gesture : m_cGestures) {
         if ((m_sFingerState.fingers.size() == 1) && (e.type == wf::touch::EVENT_TYPE_TOUCH_DOWN)) {
