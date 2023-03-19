@@ -40,6 +40,14 @@ struct STouchData {
     Vector2D       touchSurfaceOrigin;
 };
 
+// used for gestures
+struct SFingerData {
+    uint8_t  type; // TODO enum: down, move, up
+    uint8_t  id;
+    uint32_t time; // time of last update
+    Vector2D pos;
+};
+
 // The third row is always 0 0 1 and is not expected by `libinput_device_config_calibration_set_matrix`
 static const float MATRICES[8][6] = {{// normal
                                       1, 0, 0, 0, 1, 0},
@@ -208,6 +216,11 @@ class CInputManager {
 
     // for releasing mouse buttons
     std::list<uint32_t> m_lCurrentlyHeldButtons;
+
+    // touch gestures
+    std::list<SFingerData> m_lFingers; // prolly a good idea to use a map instead
+    Vector2D               m_vTouchGestureLastCenter;
+    bool                   m_bTouchGestureActive;
 
     // swipe
     void beginWorkspaceSwipe();
