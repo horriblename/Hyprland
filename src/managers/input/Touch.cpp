@@ -1,10 +1,7 @@
 #include "InputManager.hpp"
 #include "../../Compositor.hpp"
 
-// workaround so that emulated swipes aren't too small to be detected
-constexpr int touchSwipeFactor = 500;
-
-void          CInputManager::onTouchDown(wlr_touch_down_event* e) {
+void CInputManager::onTouchDown(wlr_touch_down_event* e) {
     static auto* const PSWIPE        = &g_pConfigManager->getConfigValuePtr("gestures:workspace_swipe")->intValue;
     static auto* const PSWIPEFINGERS = &g_pConfigManager->getConfigValuePtr("gestures:workspace_swipe_fingers")->intValue;
 
@@ -38,10 +35,10 @@ void          CInputManager::onTouchDown(wlr_touch_down_event* e) {
 
     m_vTouchGestureLastCenter = Vector2D(e->x, e->y);
     finger                    = SFingerData{
-                                    .type = 0,
-                                    .id   = e->touch_id,
-                                    .time = e->time_msec,
-                                    .pos  = m_vTouchGestureLastCenter,
+                           .type = 0,
+                           .id   = e->touch_id,
+                           .time = e->time_msec,
+                           .pos  = m_vTouchGestureLastCenter,
     };
     m_lFingers.push_back(finger);
 
@@ -104,7 +101,10 @@ void CInputManager::onTouchUp(wlr_touch_up_event* e) {
 }
 
 void CInputManager::onTouchMove(wlr_touch_motion_event* e) {
-    auto finger = std::find_if(m_lFingers.begin(), m_lFingers.end(), [&](SFingerData finger) { return finger.id == e->touch_id; });
+    static auto* const PSWIPEDIST = &g_pConfigManager->getConfigValuePtr("gestures:workspace_swipe_distance")->intValue;
+    const bool         VERTANIMS  = m_sActiveSwipe.pWorkspaceBegin->m_vRenderOffset.getConfig()->pValues->internalStyle == "slidevert";
+
+    auto               finger = std::find_if(m_lFingers.begin(), m_lFingers.end(), [&](SFingerData finger) { return finger.id == e->touch_id; });
     if (finger == m_lFingers.end()) {
         return;
     }
@@ -112,19 +112,29 @@ void CInputManager::onTouchMove(wlr_touch_motion_event* e) {
     finger->time = e->time_msec;
     finger->pos  = Vector2D(e->x, e->y);
 
-    if (m_bTouchGestureActive) {
-        Vector2D currentCenter;
-        for (auto finger : m_lFingers) {
-            currentCenter = currentCenter + finger.pos;
-        }
-        currentCenter = currentCenter / m_lFingers.size();
+    if (m_bTouchGestureActive && m_sActiveSwipe.pMonitor) {
+        if (!m_sActiveSwipe.pMonitor) {
+            Debug::log(WARN, "ignoring touch gesture motion event due to missing monitor");
+        } else {
+            Vector2D currentCenter;
+            for (auto finger : m_lFingers) {
+                currentCenter = currentCenter + finger.pos;
+            }
+            // (-m_sActiveSwipe.delta) / *PSWIPEDIST) * m_sActiveSwipe.pMonitor->vecSize.x
 
-        auto emulated_swipe = wlr_pointer_swipe_update_event{.pointer   = nullptr,
-                                                             .time_msec = e->time_msec,
-                                                             .fingers   = m_lFingers.size(),
-                                                             .dx        = (currentCenter.x - m_vTouchGestureLastCenter.x) * touchSwipeFactor,
-                                                             .dy        = (currentCenter.y - m_vTouchGestureLastCenter.y) * touchSwipeFactor};
-        onSwipeUpdate(&emulated_swipe);
+            currentCenter = currentCenter / m_lFingers.size();
+            // touch coords are within 0 to 1, we need to scale it with screen width/height (TODO)
+            // (screen size should consider scaling) and divide by PSWIPEDIST to get one to one
+            // gestures
+            double swipeFactor = (VERTANIMS ? m_sActiveSwipe.pMonitor->vecTransformedSize.x : m_sActiveSwipe.pMonitor->vecTransformedSize.y) / *PSWIPEDIST;
+
+            auto   emulated_swipe = wlr_pointer_swipe_update_event{.pointer   = nullptr,
+                                                                   .time_msec = e->time_msec,
+                                                                   .fingers   = m_lFingers.size(),
+                                                                   .dx        = (currentCenter.x - m_vTouchGestureLastCenter.x) * swipeFactor,
+                                                                   .dy        = (currentCenter.y - m_vTouchGestureLastCenter.y) * swipeFactor};
+            onSwipeUpdate(&emulated_swipe);
+        }
     }
 
     if (m_sTouchData.touchFocusWindow && g_pCompositor->windowValidMapped(m_sTouchData.touchFocusWindow)) {
