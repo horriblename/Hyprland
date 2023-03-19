@@ -1,10 +1,16 @@
 #include "InputManager.hpp"
 #include "../../Compositor.hpp"
 
-void CInputManager::onTouchDown(wlr_touch_down_event* e) {
-    auto       PMONITOR = g_pCompositor->getMonitorFromName(e->touch->output_name ? e->touch->output_name : "");
+// workaround so that emulated swipes aren't too small to be detected
+constexpr int touchSwipeFactor = 500;
 
-    const auto PDEVIT = std::find_if(m_lTouchDevices.begin(), m_lTouchDevices.end(), [&](const STouchDevice& other) { return other.pWlrDevice == &e->touch->base; });
+void          CInputManager::onTouchDown(wlr_touch_down_event* e) {
+    static auto* const PSWIPE        = &g_pConfigManager->getConfigValuePtr("gestures:workspace_swipe")->intValue;
+    static auto* const PSWIPEFINGERS = &g_pConfigManager->getConfigValuePtr("gestures:workspace_swipe_fingers")->intValue;
+
+    auto               PMONITOR = g_pCompositor->getMonitorFromName(e->touch->output_name ? e->touch->output_name : "");
+
+    const auto         PDEVIT = std::find_if(m_lTouchDevices.begin(), m_lTouchDevices.end(), [&](const STouchDevice& other) { return other.pWlrDevice == &e->touch->base; });
 
     if (PDEVIT != m_lTouchDevices.end() && !PDEVIT->boundOutput.empty())
         PMONITOR = g_pCompositor->getMonitorFromName(PDEVIT->boundOutput);
@@ -27,6 +33,30 @@ void CInputManager::onTouchDown(wlr_touch_down_event* e) {
     m_sTouchData.touchFocusWindow  = m_pFoundWindowToFocus;
     m_sTouchData.touchFocusSurface = m_pFoundSurfaceToFocus;
     m_sTouchData.touchFocusLS      = m_pFoundLSToFocus;
+
+    SFingerData finger;
+
+    m_vTouchGestureLastCenter = Vector2D(e->x, e->y);
+    finger                    = SFingerData{
+                                    .type = 0,
+                                    .id   = e->touch_id,
+                                    .time = e->time_msec,
+                                    .pos  = m_vTouchGestureLastCenter,
+    };
+    m_lFingers.push_back(finger);
+
+    if (*PSWIPE && (long)m_lFingers.size() == *PSWIPEFINGERS) {
+        auto emulated_swipe = wlr_pointer_swipe_begin_event{.pointer = nullptr, .time_msec = e->time_msec, .fingers = m_lFingers.size()};
+        onSwipeBegin(&emulated_swipe);
+        m_bTouchGestureActive = true;
+        return;
+    }
+    if (*PSWIPE && m_bTouchGestureActive) {
+        m_bTouchGestureActive = false;
+        auto emulated_swipe   = wlr_pointer_swipe_end_event{.pointer = nullptr, .time_msec = e->time_msec, .cancelled = false};
+        onSwipeEnd(&emulated_swipe);
+        return;
+    }
 
     Vector2D local;
 
@@ -53,12 +83,50 @@ void CInputManager::onTouchDown(wlr_touch_down_event* e) {
 }
 
 void CInputManager::onTouchUp(wlr_touch_up_event* e) {
+    // const auto finger = std::find_if(m_lFingers.begin(), m_lFingers.end(), ([&e](SFingerData finger) { return finger.id == e->touch_id; }));
+    // if (finger == m_lFingers.end()) {
+    //     return;
+    // }
+    // finger->type = 2;
+    // finger->time = e->time_msec;
+    m_lFingers.remove_if([&e](SFingerData finger) { return finger.id == e->touch_id; });
+
+    if (m_bTouchGestureActive) {
+        m_bTouchGestureActive = false;
+        auto emulated_swipe   = wlr_pointer_swipe_end_event{.pointer = nullptr, .time_msec = e->time_msec, .cancelled = false};
+        onSwipeEnd(&emulated_swipe);
+        return;
+    }
+
     if (m_sTouchData.touchFocusSurface) {
         wlr_seat_touch_notify_up(g_pCompositor->m_sSeat.seat, e->time_msec, e->touch_id);
     }
 }
 
 void CInputManager::onTouchMove(wlr_touch_motion_event* e) {
+    auto finger = std::find_if(m_lFingers.begin(), m_lFingers.end(), [&](SFingerData finger) { return finger.id == e->touch_id; });
+    if (finger == m_lFingers.end()) {
+        return;
+    }
+    finger->type = 1;
+    finger->time = e->time_msec;
+    finger->pos  = Vector2D(e->x, e->y);
+
+    if (m_bTouchGestureActive) {
+        Vector2D currentCenter;
+        for (auto finger : m_lFingers) {
+            currentCenter = currentCenter + finger.pos;
+        }
+        currentCenter = currentCenter / m_lFingers.size();
+
+        auto emulated_swipe = wlr_pointer_swipe_update_event{.pointer   = nullptr,
+                                                             .time_msec = e->time_msec,
+                                                             .fingers   = m_lFingers.size(),
+                                                             .dx        = (currentCenter.x - m_vTouchGestureLastCenter.x) * touchSwipeFactor,
+                                                             .dy        = (currentCenter.y - m_vTouchGestureLastCenter.y) * touchSwipeFactor};
+        onSwipeUpdate(&emulated_swipe);
+    }
+
     if (m_sTouchData.touchFocusWindow && g_pCompositor->windowValidMapped(m_sTouchData.touchFocusWindow)) {
         const auto PMONITOR = g_pCompositor->getMonitorFromID(m_sTouchData.touchFocusWindow->m_iMonitorID);
 
