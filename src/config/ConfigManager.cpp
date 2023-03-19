@@ -71,6 +71,7 @@ void CConfigManager::setDefaultVars() {
     configValues["misc:vfr"].intValue                          = 1;
     configValues["misc:vrr"].intValue                          = 0;
     configValues["misc:mouse_move_enables_dpms"].intValue      = 0;
+    configValues["misc:key_press_enables_dpms"].intValue       = 0;
     configValues["misc:always_follow_on_dnd"].intValue         = 1;
     configValues["misc:layers_hog_keyboard_focus"].intValue    = 1;
     configValues["misc:animate_manual_resizes"].intValue       = 1;
@@ -1692,6 +1693,9 @@ void CConfigManager::performMonitorReload() {
     bool overAgain = false;
 
     for (auto& m : g_pCompositor->m_vRealMonitors) {
+        if (!m->output)
+            continue;
+
         auto rule = getMonitorRuleFor(m->szName, m->output->description ? m->output->description : "");
 
         if (!g_pHyprRenderer->applyMonitorRule(m.get(), &rule)) {
@@ -1757,6 +1761,9 @@ bool CConfigManager::shouldBlurLS(const std::string& ns) {
 
 void CConfigManager::ensureDPMS() {
     for (auto& rm : g_pCompositor->m_vRealMonitors) {
+        if (!rm->output)
+            continue;
+
         auto rule = getMonitorRuleFor(rm->szName, rm->output->description ? rm->output->description : "");
 
         if (rule.disabled == rm->m_bEnabled) {
@@ -1770,6 +1777,9 @@ void CConfigManager::ensureVRR(CMonitor* pMonitor) {
     static auto* const PVRR = &getConfigValuePtr("misc:vrr")->intValue;
 
     static auto        ensureVRRForDisplay = [&](CMonitor* m) -> void {
+        if (!m->output)
+            return;
+
         if (*PVRR == 0) {
             if (m->vrrActive) {
                 wlr_output_enable_adaptive_sync(m->output, 0);

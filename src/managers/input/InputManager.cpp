@@ -963,6 +963,12 @@ void CInputManager::onKeyboardKey(wlr_keyboard_key_event* e, SKeyboard* pKeyboar
     if (!pKeyboard->enabled)
         return;
 
+    static auto* const PDPMS = &g_pConfigManager->getConfigValuePtr("misc:key_press_enables_dpms")->intValue;
+    if (*PDPMS && !g_pCompositor->m_bDPMSStateON) {
+        // enable dpms
+        g_pKeybindManager->dpms("on");
+    }
+
     bool passEvent = g_pKeybindManager->onKeyEvent(e, pKeyboard);
 
     wlr_idle_notify_activity(g_pCompositor->m_sWLRIdle, g_pCompositor->m_sSeat.seat);
@@ -1302,13 +1308,16 @@ void CInputManager::newSwitch(wlr_input_device* pDevice) {
         [&](void* owner, void* data) {
             const auto PDEVICE = (SSwitchDevice*)owner;
             const auto NAME    = std::string(PDEVICE->pWlrDevice->name);
+            const auto E       = (wlr_switch_toggle_event*)data;
+
+            if (PDEVICE->status != -1 && PDEVICE->status == E->switch_state)
+                return;
 
             Debug::log(LOG, "Switch %s fired, triggering binds.", NAME.c_str());
 
             g_pKeybindManager->onSwitchEvent(NAME);
 
-            const auto event_data = (wlr_switch_toggle_event*)data;
-            switch (event_data->switch_state) {
+            switch (E->switch_state) {
                 case WLR_SWITCH_STATE_ON:
                     Debug::log(LOG, "Switch %s turn on, triggering binds.", NAME.c_str());
                     g_pKeybindManager->onSwitchOnEvent(NAME);
@@ -1318,6 +1327,8 @@ void CInputManager::newSwitch(wlr_input_device* pDevice) {
                     g_pKeybindManager->onSwitchOffEvent(NAME);
                     break;
             }
+
+            PDEVICE->status = E->switch_state;
         },
         PNEWDEV, "SwitchDevice");
 }
