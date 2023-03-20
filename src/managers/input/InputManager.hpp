@@ -113,6 +113,10 @@ class CInputManager {
     void               onTouchUp(wlr_touch_up_event*);
     void               onTouchMove(wlr_touch_motion_event*);
 
+    void               emulateSwipeBegin(uint32_t time, uint32_t fingers);
+    void               emulateSwipeEnd(uint32_t time, bool cancelled);
+    void               emulateSwipeUpdate(uint32_t time, uint32_t fingers);
+
     void               onPointerHoldBegin(wlr_pointer_hold_begin_event*);
     void               onPointerHoldEnd(wlr_pointer_hold_end_event*);
 
