@@ -94,6 +94,15 @@
         mesonFlags = oldAttrs.mesonFlags ++ ["-Dexperimental=true"];
       });
 
+      # For a plugin env we need:
+      # 1. all buildInputs propagated (we need their header files)
+      # 2. protocol header files generated in ./protocols
+      hyprland-pluginenv =
+        prev.hyprland.overrideAttrs
+        (prevAttrs: {
+          propagatedBuildInputs = prevAttrs.buildInputs;
+        });
+
       xdg-desktop-portal-hyprland = inputs.xdph.packages.${prev.stdenv.hostPlatform.system}.default.override {
         hyprland-share-picker = inputs.xdph.packages.${prev.stdenv.hostPlatform.system}.hyprland-share-picker.override {inherit hyprland;};
       };
