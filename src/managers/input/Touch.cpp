@@ -143,7 +143,7 @@ void CInputManager::emulateSwipeEnd(uint32_t time, bool cancelled) {
 }
 
 void CInputManager::emulateSwipeUpdate(uint32_t time, uint32_t fingers /*TODO remove?*/) {
-    static auto* const PSWIPEDIST = &g_pConfigManager->getConfigValuePtr("gestures:workspace_swipe_distance")->intValue;
+    // static auto* const PSWIPEDIST = &g_pConfigManager->getConfigValuePtr("gestures:workspace_swipe_distance")->intValue;
     const bool         VERTANIMS  = m_sActiveSwipe.pWorkspaceBegin->m_vRenderOffset.getConfig()->pValues->internalStyle == "slidevert";
 
     if (!m_sActiveSwipe.pMonitor) {
@@ -153,7 +153,7 @@ void CInputManager::emulateSwipeUpdate(uint32_t time, uint32_t fingers /*TODO re
 
     // touch coords are within 0 to 1, we need to scale it with screen width/height (should consider scaling) and
     // divide by PSWIPEDIST to get one to one gestures
-    const double swipeFactor = (VERTANIMS ? m_sActiveSwipe.pMonitor->vecTransformedSize.y : m_sActiveSwipe.pMonitor->vecTransformedSize.x) / *PSWIPEDIST;
+    const double swipeFactor = (VERTANIMS ? m_sActiveSwipe.pMonitor->vecTransformedSize.y : m_sActiveSwipe.pMonitor->vecTransformedSize.x);
 
     Vector2D     currentCenter;
     for (auto finger : m_lFingers) {
