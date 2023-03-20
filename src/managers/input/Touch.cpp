@@ -159,9 +159,8 @@ void CInputManager::emulateSwipeUpdate(uint32_t time, uint32_t fingers /*TODO re
     auto emulated_swipe = wlr_pointer_swipe_update_event{.pointer   = nullptr,
                                                          .time_msec = time,
                                                          .fingers   = m_lFingers.size(),
-                                                         .dx        = (currentCenter.x - m_vTouchGestureLastCenter.x) * *PSWIPEDIST,
-                                                         .dy        = (currentCenter.y - m_vTouchGestureLastCenter.y) * *PSWIPEDIST};
-
+                                                         .dx        = (currentCenter.x - m_vTouchGestureLastCenter.x) * swipeFactor,
+                                                         .dy        = (currentCenter.y - m_vTouchGestureLastCenter.y) * swipeFactor};
     onSwipeUpdate(&emulated_swipe);
     m_vTouchGestureLastCenter = currentCenter;
 }
