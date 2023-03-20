@@ -148,18 +148,22 @@ void CInputManager::emulateSwipeUpdate(uint32_t time, uint32_t fingers /*TODO re
         return;
     }
 
-    Vector2D currentCenter;
+    // touch coords are within 0 to 1, we need to scale it with screen width/height (should consider scaling) and
+    // divide by PSWIPEDIST to get one to one gestures
+    const double swipeFactor = (VERTANIMS ? m_sActiveSwipe.pMonitor->vecTransformedSize.y : m_sActiveSwipe.pMonitor->vecTransformedSize.x) / *PSWIPEDIST;
+
+    Vector2D     currentCenter;
     for (auto finger : m_lFingers) {
         currentCenter = currentCenter + finger.pos;
     }
     currentCenter = currentCenter / m_lFingers.size();
 
-    // touch coords are within 0 to 1, we need to scale it with PSWIPEDIST for one to one gesture
     auto emulated_swipe = wlr_pointer_swipe_update_event{.pointer   = nullptr,
                                                          .time_msec = time,
                                                          .fingers   = m_lFingers.size(),
                                                          .dx        = (currentCenter.x - m_vTouchGestureLastCenter.x) * swipeFactor,
                                                          .dy        = (currentCenter.y - m_vTouchGestureLastCenter.y) * swipeFactor};
+
     onSwipeUpdate(&emulated_swipe);
     m_vTouchGestureLastCenter = currentCenter;
 }
