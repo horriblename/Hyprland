@@ -3,8 +3,8 @@
 
 void CInputManager::onTouchDown(wlr_touch_down_event* e) {
     static auto* const PRESIZEONBORDER = &g_pConfigManager->getConfigValuePtr("general:resize_on_border")->intValue;
-    static auto* const PSWIPE        = &g_pConfigManager->getConfigValuePtr("gestures:workspace_swipe")->intValue;
-    static auto* const PSWIPEFINGERS = &g_pConfigManager->getConfigValuePtr("gestures:workspace_swipe_fingers")->intValue;
+    static auto* const PSWIPE          = &g_pConfigManager->getConfigValuePtr("gestures:workspace_swipe")->intValue;
+    static auto* const PSWIPEFINGERS   = &g_pConfigManager->getConfigValuePtr("gestures:workspace_swipe_fingers")->intValue;
 
     auto               PMONITOR = g_pCompositor->getMonitorFromName(e->touch->output_name ? e->touch->output_name : "");
 
@@ -71,15 +71,11 @@ void CInputManager::onTouchDown(wlr_touch_down_event* e) {
     m_lFingers.push_back(finger);
 
     if (*PSWIPE && (long)m_lFingers.size() == *PSWIPEFINGERS) {
-        auto emulated_swipe = wlr_pointer_swipe_begin_event{.pointer = nullptr, .time_msec = e->time_msec, .fingers = m_lFingers.size()};
-        onSwipeBegin(&emulated_swipe);
-        m_bTouchGestureActive = true;
+        emulateSwipeBegin(e->time_msec, m_lFingers.size());
         return;
     }
     if (*PSWIPE && m_bTouchGestureActive) {
-        m_bTouchGestureActive = false;
-        auto emulated_swipe   = wlr_pointer_swipe_end_event{.pointer = nullptr, .time_msec = e->time_msec, .cancelled = false};
-        onSwipeEnd(&emulated_swipe);
+        emulateSwipeEnd(e->time_msec, true);
         return;
     }
 
@@ -113,18 +109,10 @@ void CInputManager::onTouchUp(wlr_touch_up_event* e) {
         return;
     }
 
-    // const auto finger = std::find_if(m_lFingers.begin(), m_lFingers.end(), ([&e](SFingerData finger) { return finger.id == e->touch_id; }));
-    // if (finger == m_lFingers.end()) {
-    //     return;
-    // }
-    // finger->type = 2;
-    // finger->time = e->time_msec;
     m_lFingers.remove_if([&e](SFingerData finger) { return finger.id == e->touch_id; });
 
     if (m_bTouchGestureActive) {
-        m_bTouchGestureActive = false;
-        auto emulated_swipe   = wlr_pointer_swipe_end_event{.pointer = nullptr, .time_msec = e->time_msec, .cancelled = false};
-        onSwipeEnd(&emulated_swipe);
+        emulateSwipeEnd(e->time_msec, false);
         return;
     }
 
@@ -139,40 +127,18 @@ void CInputManager::onTouchMove(wlr_touch_motion_event* e) {
 
     g_pLayoutManager->getCurrentLayout()->onMouseMove(getMouseCoordsInternal());
 
-    static auto* const PSWIPEDIST = &g_pConfigManager->getConfigValuePtr("gestures:workspace_swipe_distance")->intValue;
-    const bool         VERTANIMS  = m_sActiveSwipe.pWorkspaceBegin->m_vRenderOffset.getConfig()->pValues->internalStyle == "slidevert";
-
-    auto               finger = std::find_if(m_lFingers.begin(), m_lFingers.end(), [&](SFingerData finger) { return finger.id == e->touch_id; });
+    auto finger = std::find_if(m_lFingers.begin(), m_lFingers.end(), [&](SFingerData finger) { return finger.id == e->touch_id; });
     if (finger == m_lFingers.end()) {
+        Debug::log(ERR, "Touch ID not found!");
         return;
     }
     finger->type = 1;
     finger->time = e->time_msec;
     finger->pos  = Vector2D(e->x, e->y);
 
-    if (m_bTouchGestureActive && m_sActiveSwipe.pMonitor) {
-        if (!m_sActiveSwipe.pMonitor) {
-            Debug::log(WARN, "ignoring touch gesture motion event due to missing monitor");
-        } else {
-            Vector2D currentCenter;
-            for (auto finger : m_lFingers) {
-                currentCenter = currentCenter + finger.pos;
-            }
-            // (-m_sActiveSwipe.delta) / *PSWIPEDIST) * m_sActiveSwipe.pMonitor->vecSize.x
-
-            currentCenter = currentCenter / m_lFingers.size();
-            // touch coords are within 0 to 1, we need to scale it with screen width/height (TODO)
-            // (screen size should consider scaling) and divide by PSWIPEDIST to get one to one
-            // gestures
-            double swipeFactor = (VERTANIMS ? m_sActiveSwipe.pMonitor->vecTransformedSize.x : m_sActiveSwipe.pMonitor->vecTransformedSize.y) / *PSWIPEDIST;
-
-            auto   emulated_swipe = wlr_pointer_swipe_update_event{.pointer   = nullptr,
-                                                                   .time_msec = e->time_msec,
-                                                                   .fingers   = m_lFingers.size(),
-                                                                   .dx        = (currentCenter.x - m_vTouchGestureLastCenter.x) * swipeFactor,
-                                                                   .dy        = (currentCenter.y - m_vTouchGestureLastCenter.y) * swipeFactor};
-            onSwipeUpdate(&emulated_swipe);
-        }
+    if (m_bTouchGestureActive) {
+        emulateSwipeUpdate(e->time_msec, m_lFingers.size());
+        return;
     }
 
     if (m_sTouchData.touchFocusWindow && g_pCompositor->windowValidMapped(m_sTouchData.touchFocusWindow)) {
@@ -196,6 +162,46 @@ void CInputManager::onTouchMove(wlr_touch_motion_event* e) {
         wlr_seat_touch_notify_motion(g_pCompositor->m_sSeat.seat, e->time_msec, e->touch_id, local.x, local.y);
         wlr_seat_pointer_notify_motion(g_pCompositor->m_sSeat.seat, e->time_msec, local.x, local.y);
     }
+}
+
+void CInputManager::emulateSwipeBegin(uint32_t time, uint32_t fingers) {
+    auto emulated_swipe = wlr_pointer_swipe_begin_event{.pointer = nullptr, .time_msec = time, .fingers = fingers};
+    onSwipeBegin(&emulated_swipe);
+    m_bTouchGestureActive = true;
+    return;
+}
+
+void CInputManager::emulateSwipeEnd(uint32_t time, bool cancelled) {
+    auto emulated_swipe = wlr_pointer_swipe_end_event{.pointer = nullptr, .time_msec = time, .cancelled = cancelled};
+    onSwipeEnd(&emulated_swipe);
+    m_bTouchGestureActive = false;
+    return;
+}
+
+void CInputManager::emulateSwipeUpdate(uint32_t time, uint32_t fingers) {
+    static auto* const PSWIPEDIST = &g_pConfigManager->getConfigValuePtr("gestures:workspace_swipe_distance")->intValue;
+    const bool         VERTANIMS  = m_sActiveSwipe.pWorkspaceBegin->m_vRenderOffset.getConfig()->pValues->internalStyle == "slidevert";
+
+    if (!m_sActiveSwipe.pMonitor) {
+        Debug::log(ERR, "ignoring touch gesture motion event due to missing monitor!");
+        return;
+    }
+    Vector2D currentCenter;
+    for (auto finger : m_lFingers) {
+        currentCenter = currentCenter + finger.pos;
+    }
+
+    // touch coords are within 0 to 1, we need to scale it with screen width/height (should consider scaling) and
+    // divide by PSWIPEDIST to get one to one gestures
+    const double swipeFactor = (VERTANIMS ? m_sActiveSwipe.pMonitor->vecTransformedSize.y : m_sActiveSwipe.pMonitor->vecTransformedSize.x) / *PSWIPEDIST;
+    currentCenter            = currentCenter / m_lFingers.size();
+
+    auto emulated_swipe = wlr_pointer_swipe_update_event{.pointer   = nullptr,
+                                                         .time_msec = time,
+                                                         .fingers   = fingers,
+                                                         .dx        = (currentCenter.x - m_vTouchGestureLastCenter.x) * swipeFactor,
+                                                         .dy        = (currentCenter.y - m_vTouchGestureLastCenter.y) * swipeFactor};
+    onSwipeUpdate(&emulated_swipe);
 }
 
 void CInputManager::onPointerHoldBegin(wlr_pointer_hold_begin_event* e) {
