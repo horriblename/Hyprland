@@ -140,7 +140,7 @@ void CInputManager::emulateSwipeEnd(uint32_t time, bool cancelled) {
     return;
 }
 
-void CInputManager::emulateSwipeUpdate(uint32_t time, uint32_t fingers) {
+void CInputManager::emulateSwipeUpdate(uint32_t time, uint32_t fingers /*TODO remove?*/) {
     static auto* const PSWIPEDIST = &g_pConfigManager->getConfigValuePtr("gestures:workspace_swipe_distance")->intValue;
     const bool         VERTANIMS  = m_sActiveSwipe.pWorkspaceBegin->m_vRenderOffset.getConfig()->pValues->internalStyle == "slidevert";
 
@@ -160,10 +160,11 @@ void CInputManager::emulateSwipeUpdate(uint32_t time, uint32_t fingers) {
 
     auto emulated_swipe = wlr_pointer_swipe_update_event{.pointer   = nullptr,
                                                          .time_msec = time,
-                                                         .fingers   = fingers,
+                                                         .fingers   = m_lFingers.size(),
                                                          .dx        = (currentCenter.x - m_vTouchGestureLastCenter.x) * swipeFactor,
                                                          .dy        = (currentCenter.y - m_vTouchGestureLastCenter.y) * swipeFactor};
     onSwipeUpdate(&emulated_swipe);
+    m_vTouchGestureLastCenter = currentCenter;
 }
 
 void CInputManager::onPointerHoldBegin(wlr_pointer_hold_begin_event* e) {
