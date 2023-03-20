@@ -46,7 +46,7 @@ void          CInputManager::onTouchDown(wlr_touch_down_event* e) {
     m_lFingers.push_back(finger);
 
     if (*PSWIPE && (long)m_lFingers.size() == *PSWIPEFINGERS) {
-        if (m_sActiveSwipe.pMonitor) { // emulated swipe will also interfere with real swipe events
+        if (m_sActiveSwipe.pWorkspaceBegin) { // emulated swipe will also interfere with real swipe events
             emulateSwipeEnd(e->time_msec, true);
         }
         emulateSwipeBegin(e->time_msec, m_lFingers.size());
