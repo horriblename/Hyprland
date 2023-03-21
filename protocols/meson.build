@@ -45,8 +45,8 @@ foreach p : protocols
 	wl_protos_headers += custom_target(
 		xml.underscorify() + '_server_h',
 		input: xml,
-      install: true,
-      install_dir: 'include',
+      install: get_option('pluginenv'),
+      install_dir: '',
 		output: '@BASENAME@-protocol.h',
 		command: [wayland_scanner, 'server-header', '@INPUT@', '@OUTPUT@'],
 	)

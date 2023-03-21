@@ -71,9 +71,20 @@ if get_option('buildtype') == 'debug'
   add_project_arguments('-DHYPRLAND_DEBUG', language: 'cpp')
 endif
 
-subdir('protocols')
-subdir('src')
-subdir('hyprctl')
-subdir('assets')
-subdir('example')
-subdir('docs')
+if get_option('pluginenv')
+  fs = import('fs')
+  globber = run_command('find', 'src', '-name', '*.hpp', check: true)
+  headers = globber.stdout().strip().split('\n')
+  foreach file : headers
+    dir = fs.parent(file)
+    fs.copyfile(file, install: true, install_dir: dir)
+  endforeach
+  subdir('protocols')
+else
+  subdir('protocols')
+  subdir('src')
+  subdir('hyprctl')
+  subdir('assets')
+  subdir('example')
+  subdir('docs')
+endif
