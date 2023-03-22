@@ -143,29 +143,25 @@ void CInputManager::emulateSwipeEnd(uint32_t time, bool cancelled) {
 }
 
 void CInputManager::emulateSwipeUpdate(uint32_t time, uint32_t fingers /*TODO remove?*/) {
-    // static auto* const PSWIPEDIST = &g_pConfigManager->getConfigValuePtr("gestures:workspace_swipe_distance")->intValue;
-    const bool         VERTANIMS  = m_sActiveSwipe.pWorkspaceBegin->m_vRenderOffset.getConfig()->pValues->internalStyle == "slidevert";
+    static auto* const PSWIPEDIST = &g_pConfigManager->getConfigValuePtr("gestures:workspace_swipe_distance")->intValue;
 
     if (!m_sActiveSwipe.pMonitor) {
         Debug::log(ERR, "ignoring touch gesture motion event due to missing monitor!");
         return;
     }
 
-    // touch coords are within 0 to 1, we need to scale it with screen width/height (should consider scaling) and
-    // divide by PSWIPEDIST to get one to one gestures
-    const double swipeFactor = (VERTANIMS ? m_sActiveSwipe.pMonitor->vecTransformedSize.y : m_sActiveSwipe.pMonitor->vecTransformedSize.x);
-
-    Vector2D     currentCenter;
+    Vector2D currentCenter;
     for (auto finger : m_lFingers) {
         currentCenter = currentCenter + finger.pos;
     }
     currentCenter = currentCenter / m_lFingers.size();
 
+    // touch coords are within 0 to 1, we need to scale it with PSWIPEDIST for one to one gesture
     auto emulated_swipe = wlr_pointer_swipe_update_event{.pointer   = nullptr,
                                                          .time_msec = time,
                                                          .fingers   = m_lFingers.size(),
-                                                         .dx        = (currentCenter.x - m_vTouchGestureLastCenter.x) * swipeFactor,
-                                                         .dy        = (currentCenter.y - m_vTouchGestureLastCenter.y) * swipeFactor};
+                                                         .dx        = (currentCenter.x - m_vTouchGestureLastCenter.x) * *PSWIPEDIST,
+                                                         .dy        = (currentCenter.y - m_vTouchGestureLastCenter.y) * *PSWIPEDIST};
 
     onSwipeUpdate(&emulated_swipe);
     m_vTouchGestureLastCenter = currentCenter;
