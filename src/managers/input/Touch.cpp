@@ -19,10 +19,10 @@ void CInputManager::onTouchDown(wlr_touch_down_event* e) {
     wlr_cursor_warp(g_pCompositor->m_sWLRCursor, nullptr, PMONITOR->vecPosition.x + e->x * PMONITOR->vecSize.x, PMONITOR->vecPosition.y + e->y * PMONITOR->vecSize.y);
 
     // TODO should I use ensureMouseBindState()
-    if (g_pKeybindManager->m_bIsMouseBindActive) {
-        // deny all touch events when mouse bind is active
-        return;
-    }
+    // if (g_pKeybindManager->m_bIsMouseBindActive) {
+    //     // deny all touch events when mouse bind is active
+    //     return;
+    // }
 
     // TODO maybe move CLICKMODE_KILL before this block
     const auto PASS = g_pKeybindManager->onTouchDownEvent(e);
@@ -179,7 +179,7 @@ void CInputManager::emulateSwipeEnd(uint32_t time, bool cancelled) {
 
 void CInputManager::emulateSwipeUpdate(uint32_t time, uint32_t fingers /*TODO remove?*/) {
     // static auto* const PSWIPEDIST = &g_pConfigManager->getConfigValuePtr("gestures:workspace_swipe_distance")->intValue;
-    const bool         VERTANIMS  = m_sActiveSwipe.pWorkspaceBegin->m_vRenderOffset.getConfig()->pValues->internalStyle == "slidevert";
+    const bool VERTANIMS = m_sActiveSwipe.pWorkspaceBegin->m_vRenderOffset.getConfig()->pValues->internalStyle == "slidevert";
 
     if (!m_sActiveSwipe.pMonitor) {
         Debug::log(ERR, "ignoring touch gesture motion event due to missing monitor!");
