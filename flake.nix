@@ -100,6 +100,7 @@
         # 1. all buildInputs propagated (we need their header files) (might not actually need all of them idk)
         # 2. protocol header files generated in ./protocols
         hyprland-pluginenv = hyprland.overrideAttrs (prevAttrs: {
+          name = "hyprland-pluginenv";
           propagatedBuildInputs = prevAttrs.buildInputs;
           mesonFlags = prevAttrs.mesonFlags ++ [ "-Dpluginenv=true" ];
           outputs = [ "out" ];
