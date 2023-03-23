@@ -45,6 +45,10 @@ void          CInputManager::onTouchDown(wlr_touch_down_event* e) {
     };
     m_lFingers.push_back(finger);
 
+    if (m_bTouchGestureActive) {
+        emulateSwipeEnd(e->time_msec, true);
+    }
+
     if (*PSWIPE && (long)m_lFingers.size() == *PSWIPEFINGERS) {
         if (m_sActiveSwipe.pWorkspaceBegin) { // emulated swipe will also interfere with real swipe events
             emulateSwipeEnd(e->time_msec, true);
@@ -127,6 +131,7 @@ void CInputManager::onTouchMove(wlr_touch_motion_event* e) {
 }
 
 void CInputManager::emulateSwipeBegin(uint32_t time, uint32_t fingers) {
+    // HACK emulated_swipe.pointer is null but it should be fine since onSwipeBegin doesn't use its value
     auto emulated_swipe = wlr_pointer_swipe_begin_event{.pointer = nullptr, .time_msec = time, .fingers = fingers};
     onSwipeBegin(&emulated_swipe);
     m_bTouchGestureActive = true;
