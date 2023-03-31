@@ -58,6 +58,8 @@ void CInputManager::mouseMoveUnified(uint32_t time, bool refocus) {
     static auto* const PRESIZECURSORICON = &g_pConfigManager->getConfigValuePtr("general:hover_icon_on_border")->intValue;
     const auto         BORDER_GRAB_AREA  = *PRESIZEONBORDER ? *PBORDERSIZE + *PBORDERGRABEXTEND : 0;
 
+    const auto         FOLLOWMOUSE = *PFOLLOWONDND && m_sDrag.drag ? 1 : *PFOLLOWMOUSE;
+
     m_pFoundSurfaceToFocus      = nullptr;
     m_pFoundLSToFocus           = nullptr;
     m_pFoundWindowToFocus       = nullptr;
@@ -130,7 +132,7 @@ void CInputManager::mouseMoveUnified(uint32_t time, bool refocus) {
             }
 
             if (CONSTRAINTWINDOW->m_bIsX11) {
-                foundSurface = g_pXWaylandManager->getWindowSurface(CONSTRAINTWINDOW);
+                foundSurface = CONSTRAINTWINDOW->m_pWLSurface.wlr();
                 surfacePos   = CONSTRAINTWINDOW->m_vRealPosition.vec();
             } else {
                 g_pCompositor->vectorWindowToSurface(mouseCoords, CONSTRAINTWINDOW, surfaceCoords);
@@ -198,7 +200,7 @@ void CInputManager::mouseMoveUnified(uint32_t time, bool refocus) {
             foundSurface = g_pCompositor->vectorWindowToSurface(mouseCoords, pFoundWindow, surfaceCoords);
             surfacePos   = Vector2D(-1337, -1337);
         } else {
-            foundSurface = g_pXWaylandManager->getWindowSurface(pFoundWindow);
+            foundSurface = pFoundWindow->m_pWLSurface.wlr();
             surfacePos   = pFoundWindow->m_vRealPosition.vec();
         }
     }
@@ -232,7 +234,7 @@ void CInputManager::mouseMoveUnified(uint32_t time, bool refocus) {
             if (!pFoundWindow->m_bIsX11) {
                 foundSurface = g_pCompositor->vectorWindowToSurface(mouseCoords, pFoundWindow, surfaceCoords);
             } else {
-                foundSurface = g_pXWaylandManager->getWindowSurface(pFoundWindow);
+                foundSurface = pFoundWindow->m_pWLSurface.wlr();
                 surfacePos   = pFoundWindow->m_vRealPosition.vec();
             }
         }
@@ -309,8 +311,8 @@ void CInputManager::mouseMoveUnified(uint32_t time, bool refocus) {
             setCursorIconOnBorder(pFoundWindow);
         }
 
-        // if we're on an input deco, reset cursor. Don't on overriden
-        // if (!m_bCursorImageOverriden) {
+        // if we're on an input deco, reset cursor. Don't on overridden
+        // if (!m_bCursorImageOverridden) {
         //     if (!VECINRECT(m_vLastCursorPosFloored, pFoundWindow->m_vRealPosition.vec().x, pFoundWindow->m_vRealPosition.vec().y,
         //                    pFoundWindow->m_vRealPosition.vec().x + pFoundWindow->m_vRealSize.vec().x, pFoundWindow->m_vRealPosition.vec().y + pFoundWindow->m_vRealSize.vec().y)) {
         //         wlr_xcursor_manager_set_cursor_image(g_pCompositor->m_sWLRXCursorMgr, "left_ptr", g_pCompositor->m_sWLRCursor);
@@ -321,14 +323,14 @@ void CInputManager::mouseMoveUnified(uint32_t time, bool refocus) {
         //     }
         // }
 
-        if (*PFOLLOWMOUSE != 1 && !refocus) {
+        if (FOLLOWMOUSE != 1 && !refocus) {
             if (pFoundWindow != g_pCompositor->m_pLastWindow && g_pCompositor->m_pLastWindow &&
                 ((pFoundWindow->m_bIsFloating && *PFLOATBEHAVIOR == 2) || (g_pCompositor->m_pLastWindow->m_bIsFloating != pFoundWindow->m_bIsFloating && *PFLOATBEHAVIOR != 0))) {
                 // enter if change floating style
-                if (*PFOLLOWMOUSE != 3 && allowKeyboardRefocus)
+                if (FOLLOWMOUSE != 3 && allowKeyboardRefocus)
                     g_pCompositor->focusWindow(pFoundWindow, foundSurface);
                 wlr_seat_pointer_notify_enter(g_pCompositor->m_sSeat.seat, foundSurface, surfaceLocal.x, surfaceLocal.y);
-            } else if (*PFOLLOWMOUSE == 2 || *PFOLLOWMOUSE == 3) {
+            } else if (FOLLOWMOUSE == 2 || FOLLOWMOUSE == 3) {
                 wlr_seat_pointer_notify_enter(g_pCompositor->m_sSeat.seat, foundSurface, surfaceLocal.x, surfaceLocal.y);
             }
 
@@ -339,17 +341,13 @@ void CInputManager::mouseMoveUnified(uint32_t time, bool refocus) {
                 }
             }
 
-            if (*PFOLLOWONDND && m_sDrag.dragIcon) {
-                wlr_seat_pointer_notify_enter(g_pCompositor->m_sSeat.seat, foundSurface, surfaceLocal.x, surfaceLocal.y);
-            }
-
-            if (*PFOLLOWMOUSE != 0 || pFoundWindow == g_pCompositor->m_pLastWindow)
+            if (FOLLOWMOUSE != 0 || pFoundWindow == g_pCompositor->m_pLastWindow)
                 wlr_seat_pointer_notify_motion(g_pCompositor->m_sSeat.seat, time, surfaceLocal.x, surfaceLocal.y);
 
             m_bLastFocusOnLS = false;
             return; // don't enter any new surfaces
         } else {
-            if ((*PFOLLOWMOUSE != 3 && allowKeyboardRefocus) || refocus)
+            if ((FOLLOWMOUSE != 3 && allowKeyboardRefocus) || refocus)
                 g_pCompositor->focusWindow(pFoundWindow, foundSurface);
         }
 
@@ -360,7 +358,8 @@ void CInputManager::mouseMoveUnified(uint32_t time, bool refocus) {
             unsetCursorImage();
         }
 
-        if (pFoundLayerSurface && pFoundLayerSurface->layerSurface->current.keyboard_interactive && *PFOLLOWMOUSE != 3 && allowKeyboardRefocus) {
+        if (pFoundLayerSurface && (pFoundLayerSurface->layerSurface->current.keyboard_interactive || pFoundLayerSurface->layer >= ZWLR_LAYER_SHELL_V1_LAYER_TOP) &&
+            FOLLOWMOUSE != 3 && allowKeyboardRefocus) {
             g_pCompositor->focusSurface(foundSurface);
         }
 
@@ -404,7 +403,7 @@ void CInputManager::processMouseRequest(wlr_seat_pointer_request_set_cursor_even
         g_pHyprRenderer->m_bWindowRequestedCursorHide = false;
     }
 
-    if (m_bCursorImageOverriden) {
+    if (m_bCursorImageOverridden) {
         return;
     }
 
@@ -1128,7 +1127,7 @@ void CInputManager::unconstrainMouse() {
     const auto CONSTRAINTWINDOW = g_pCompositor->getConstraintWindow(g_pCompositor->m_sSeat.mouse);
 
     if (CONSTRAINTWINDOW) {
-        g_pXWaylandManager->activateSurface(g_pXWaylandManager->getWindowSurface(CONSTRAINTWINDOW), false);
+        g_pXWaylandManager->activateSurface(CONSTRAINTWINDOW->m_pWLSurface.wlr(), false);
     }
 
     wlr_pointer_constraint_v1_send_deactivated(g_pCompositor->m_sSeat.mouse->currentConstraint);
@@ -1339,14 +1338,14 @@ void CInputManager::destroySwitch(SSwitchDevice* pDevice) {
 
 void CInputManager::setCursorImageUntilUnset(std::string name) {
     wlr_xcursor_manager_set_cursor_image(g_pCompositor->m_sWLRXCursorMgr, name.c_str(), g_pCompositor->m_sWLRCursor);
-    m_bCursorImageOverriden = true;
+    m_bCursorImageOverridden = true;
 }
 
 void CInputManager::unsetCursorImage() {
-    if (!m_bCursorImageOverriden)
+    if (!m_bCursorImageOverridden)
         return;
 
-    m_bCursorImageOverriden = false;
+    m_bCursorImageOverridden = false;
     if (!g_pHyprRenderer->m_bWindowRequestedCursorHide)
         wlr_xcursor_manager_set_cursor_image(g_pCompositor->m_sWLRXCursorMgr, "left_ptr", g_pCompositor->m_sWLRCursor);
 }
