@@ -1,10 +1,7 @@
 #include "InputManager.hpp"
 #include "../../Compositor.hpp"
 
-// workaround so that emulated swipes aren't too small to be detected
-constexpr int touchSwipeFactor = 500;
-
-void          CInputManager::onTouchDown(wlr_touch_down_event* e) {
+void CInputManager::onTouchDown(wlr_touch_down_event* e) {
     static auto* const PSWIPE        = &g_pConfigManager->getConfigValuePtr("gestures:workspace_swipe")->intValue;
     static auto* const PSWIPEFINGERS = &g_pConfigManager->getConfigValuePtr("gestures:workspace_swipe_fingers")->intValue;
 
@@ -38,10 +35,10 @@ void          CInputManager::onTouchDown(wlr_touch_down_event* e) {
 
     m_vTouchGestureLastCenter = Vector2D(e->x, e->y);
     finger                    = SFingerData{
-                                    .type = 0,
-                                    .id   = e->touch_id,
-                                    .time = e->time_msec,
-                                    .pos  = m_vTouchGestureLastCenter,
+                           .type = 0,
+                           .id   = e->touch_id,
+                           .time = e->time_msec,
+                           .pos  = m_vTouchGestureLastCenter,
     };
     m_lFingers.push_back(finger);
 
