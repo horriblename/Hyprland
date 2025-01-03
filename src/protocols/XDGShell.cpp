@@ -3,6 +3,7 @@
 #include <algorithm>
 #include "../Compositor.hpp"
 #include "../managers/SeatManager.hpp"
+#include "../config/ConfigValue.hpp"
 #include "core/Seat.hpp"
 #include "core/Compositor.hpp"
 #include <cstring>
@@ -221,6 +222,13 @@ CXDGToplevelResource::CXDGToplevelResource(SP<CXdgToplevel> resource_, SP<CXDGSu
             parent->children.emplace_back(self);
 
         LOGM(LOG, "Toplevel {:x} sets parent to {:x}{}", (uintptr_t)this, (uintptr_t)newp.get(), (oldParent ? std::format(" (was {:x})", (uintptr_t)oldParent.get()) : ""));
+    });
+
+    resource->setMove([](CXdgToplevel*, wl_resource*, uint32_t) {
+        static auto PIGNOREMOVEREQ = CConfigValue<Hyprlang::INT>("general:ignore_window_move_request");
+
+        if (!*PIGNOREMOVEREQ)
+            g_pKeybindManager->changeMouseBindMode(MBIND_MOVE);
     });
 }
 
