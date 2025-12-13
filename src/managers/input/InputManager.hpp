@@ -87,71 +87,73 @@ class CInputManager {
     CInputManager();
     ~CInputManager();
 
-    void               onMouseMoved(IPointer::SMotionEvent);
-    void               onMouseWarp(IPointer::SMotionAbsoluteEvent);
-    void               onMouseButton(IPointer::SButtonEvent);
-    void               onMouseWheel(IPointer::SAxisEvent, SP<IPointer> pointer = nullptr);
-    void               onKeyboardKey(const IKeyboard::SKeyEvent&, SP<IKeyboard>);
-    void               onKeyboardMod(SP<IKeyboard>);
+    void                   onMouseMoved(IPointer::SMotionEvent);
+    void                   onMouseWarp(IPointer::SMotionAbsoluteEvent);
+    void                   onMouseButton(IPointer::SButtonEvent);
+    void                   onMouseWheel(IPointer::SAxisEvent, SP<IPointer> pointer = nullptr);
+    void                   onKeyboardKey(const IKeyboard::SKeyEvent&, SP<IKeyboard>);
+    void                   onKeyboardMod(SP<IKeyboard>);
 
-    void               newKeyboard(SP<IKeyboard>);
-    void               newKeyboard(SP<Aquamarine::IKeyboard>);
-    void               newVirtualKeyboard(SP<CVirtualKeyboardV1Resource>);
-    void               newMouse(SP<IPointer>);
-    void               newMouse(SP<Aquamarine::IPointer>);
-    void               newVirtualMouse(SP<CVirtualPointerV1Resource>);
-    void               newTouchDevice(SP<Aquamarine::ITouch>);
-    void               newSwitch(SP<Aquamarine::ISwitch>);
-    void               newTabletPad(SP<Aquamarine::ITabletPad>);
-    void               newTablet(SP<Aquamarine::ITablet>);
-    void               destroyTouchDevice(SP<ITouch>);
-    void               destroyKeyboard(SP<IKeyboard>);
-    void               destroyPointer(SP<IPointer>);
-    void               destroyTablet(SP<CTablet>);
-    void               destroyTabletTool(SP<CTabletTool>);
-    void               destroyTabletPad(SP<CTabletPad>);
-    void               destroySwitch(SSwitchDevice*);
+    void                   newKeyboard(SP<IKeyboard>);
+    void                   newKeyboard(SP<Aquamarine::IKeyboard>);
+    void                   newVirtualKeyboard(SP<CVirtualKeyboardV1Resource>);
+    void                   newMouse(SP<IPointer>);
+    void                   newMouse(SP<Aquamarine::IPointer>);
+    void                   newVirtualMouse(SP<CVirtualPointerV1Resource>);
+    void                   newTouchDevice(SP<Aquamarine::ITouch>);
+    void                   newSwitch(SP<Aquamarine::ISwitch>);
+    void                   newTabletPad(SP<Aquamarine::ITabletPad>);
+    void                   newTablet(SP<Aquamarine::ITablet>);
+    void                   destroyTouchDevice(SP<ITouch>);
+    void                   destroyKeyboard(SP<IKeyboard>);
+    void                   destroyPointer(SP<IPointer>);
+    void                   destroyTablet(SP<CTablet>);
+    void                   destroyTabletTool(SP<CTabletTool>);
+    void                   destroyTabletPad(SP<CTabletPad>);
+    void                   destroySwitch(SSwitchDevice*);
 
-    void               unconstrainMouse();
-    bool               isConstrained();
-    bool               isLocked();
+    void                   unconstrainMouse();
+    bool                   isConstrained();
+    bool                   isLocked();
 
-    Vector2D           getMouseCoordsInternal();
-    void               refocus(std::optional<Vector2D> overridePos = std::nullopt);
-    bool               refocusLastWindow(PHLMONITOR pMonitor);
-    void               simulateMouseMovement();
-    void               sendMotionEventsToFocused();
+    Vector2D               getMouseCoordsInternal();
+    void                   refocus(std::optional<Vector2D> overridePos = std::nullopt);
+    bool                   refocusLastWindow(PHLMONITOR pMonitor);
+    void                   simulateMouseMovement();
+    void                   sendMotionEventsToFocused();
 
-    void               setKeyboardLayout();
-    void               setPointerConfigs();
-    void               setTouchDeviceConfigs(SP<ITouch> dev = nullptr);
-    void               setTabletConfigs();
+    SP<CWLSurfaceResource> vectorToSurface(Vector2D coord, const PHLMONITOR& pMonitor, Vector2D& surfaceLocal, PHLWINDOW& pWindow, PHLLS& pLayerSurface) const;
 
-    void               updateCapabilities();
-    void               updateKeyboardsLeds(SP<IKeyboard>);
+    void                   setKeyboardLayout();
+    void                   setPointerConfigs();
+    void                   setTouchDeviceConfigs(SP<ITouch> dev = nullptr);
+    void                   setTabletConfigs();
 
-    void               setClickMode(eClickBehaviorMode);
-    eClickBehaviorMode getClickMode();
-    void               processMouseRequest(const CSeatManager::SSetCursorEvent& event);
+    void                   updateCapabilities();
+    void                   updateKeyboardsLeds(SP<IKeyboard>);
 
-    void               onTouchDown(ITouch::SDownEvent);
-    void               onTouchUp(ITouch::SUpEvent);
-    void               onTouchMove(ITouch::SMotionEvent);
+    void                   setClickMode(eClickBehaviorMode);
+    eClickBehaviorMode     getClickMode();
+    void                   processMouseRequest(const CSeatManager::SSetCursorEvent& event);
 
-    void               onSwipeBegin(IPointer::SSwipeBeginEvent);
-    void               onSwipeEnd(IPointer::SSwipeEndEvent);
-    void               onSwipeUpdate(IPointer::SSwipeUpdateEvent);
+    void                   onTouchDown(ITouch::SDownEvent);
+    void                   onTouchUp(ITouch::SUpEvent);
+    void                   onTouchMove(ITouch::SMotionEvent);
 
-    void               onPinchBegin(IPointer::SPinchBeginEvent);
-    void               onPinchUpdate(IPointer::SPinchUpdateEvent);
-    void               onPinchEnd(IPointer::SPinchEndEvent);
+    void                   onSwipeBegin(IPointer::SSwipeBeginEvent);
+    void                   onSwipeEnd(IPointer::SSwipeEndEvent);
+    void                   onSwipeUpdate(IPointer::SSwipeUpdateEvent);
 
-    void               onTabletAxis(CTablet::SAxisEvent);
-    void               onTabletProximity(CTablet::SProximityEvent);
-    void               onTabletTip(CTablet::STipEvent);
-    void               onTabletButton(CTablet::SButtonEvent);
+    void                   onPinchBegin(IPointer::SPinchBeginEvent);
+    void                   onPinchUpdate(IPointer::SPinchUpdateEvent);
+    void                   onPinchEnd(IPointer::SPinchEndEvent);
 
-    STouchData         m_touchData;
+    void                   onTabletAxis(CTablet::SAxisEvent);
+    void                   onTabletProximity(CTablet::SProximityEvent);
+    void                   onTabletTip(CTablet::STipEvent);
+    void                   onTabletButton(CTablet::SButtonEvent);
+
+    STouchData             m_touchData;
 
     // for dragging floating windows
     PHLWINDOWREF   m_currentlyDraggedWindow;
