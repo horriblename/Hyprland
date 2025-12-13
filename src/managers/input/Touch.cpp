@@ -11,6 +11,7 @@
 #include "../HookSystemManager.hpp"
 #include "debug/Log.hpp"
 #include "UnifiedWorkspaceSwipeGesture.hpp"
+#include "protocols/LayerShell.hpp"
 
 void CInputManager::onTouchDown(ITouch::SDownEvent e) {
     m_lastInputTouch = true;
@@ -30,11 +31,11 @@ void CInputManager::onTouchDown(ITouch::SDownEvent e) {
 
     const auto TOUCH_COORDS = PMONITOR->m_position + (e.pos * PMONITOR->m_size);
 
-    refocus(TOUCH_COORDS);
-
     if (m_clickBehavior == CLICKMODE_KILL) {
         IPointer::SButtonEvent e;
         e.state = WL_POINTER_BUTTON_STATE_PRESSED;
+
+        refocus(TOUCH_COORDS);
         g_pInputManager->processMouseDownKill(e);
         return;
     }
@@ -62,18 +63,33 @@ void CInputManager::onTouchDown(ITouch::SDownEvent e) {
         }
     }
 
-    // could have abovelock surface, thus only use lock if no ls found
-    if (g_pSessionLockManager->isSessionLocked() && m_foundLSToFocus.expired()) {
-        m_touchData.touchFocusLockSurface = g_pSessionLockManager->getSessionLockSurfaceForMonitor(PMONITOR->m_id);
-        if (!m_touchData.touchFocusLockSurface)
-            Debug::log(WARN, "The session is locked but can't find a lock surface");
-        else
-            m_touchData.touchFocusSurface = m_touchData.touchFocusLockSurface->surface->surface();
-    } else {
+    PHLLS                  pLayerSurface;
+    PHLWINDOW              pWindow;
+    Vector2D               surfaceLocal;
+    SP<CWLSurfaceResource> pSurface;
+
+    if (!g_pSessionLockManager->isSessionLocked() && (pSurface = vectorToSurface(TOUCH_COORDS, PMONITOR, surfaceLocal, pWindow, pLayerSurface)) && pLayerSurface &&
+        pLayerSurface->m_layerSurface->m_current.interactivity == ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_NONE) {
+        // do not refocus on LS with INTERACTIVITY_NONE
         m_touchData.touchFocusLockSurface.reset();
-        m_touchData.touchFocusWindow  = m_foundWindowToFocus;
-        m_touchData.touchFocusSurface = m_foundSurfaceToFocus;
-        m_touchData.touchFocusLS      = m_foundLSToFocus;
+        m_touchData.touchFocusWindow  = pWindow;
+        m_touchData.touchFocusSurface = pSurface;
+        m_touchData.touchFocusLS      = pLayerSurface;
+    } else {
+        refocus(TOUCH_COORDS);
+        // could have abovelock surface, thus only use lock if no ls found
+        if (g_pSessionLockManager->isSessionLocked() && m_foundLSToFocus.expired()) {
+            m_touchData.touchFocusLockSurface = g_pSessionLockManager->getSessionLockSurfaceForMonitor(PMONITOR->m_id);
+            if (!m_touchData.touchFocusLockSurface)
+                Debug::log(WARN, "The session is locked but can't find a lock surface");
+            else
+                m_touchData.touchFocusSurface = m_touchData.touchFocusLockSurface->surface->surface();
+        } else {
+            m_touchData.touchFocusLockSurface.reset();
+            m_touchData.touchFocusWindow  = m_foundWindowToFocus;
+            m_touchData.touchFocusSurface = m_foundSurfaceToFocus;
+            m_touchData.touchFocusLS      = m_foundLSToFocus;
+        }
     }
 
     Vector2D local;
